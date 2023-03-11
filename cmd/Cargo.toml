@@ -10,3 +10,5 @@ path = "src/main.rs"
 # See more keys and their definitions at https://doc.rust-lang.org/cargo/reference/manifest.html
 
 [dependencies]
+actix-web = "4.0.0"
+serde = { version = "1.0.154", features = ["derive"] }

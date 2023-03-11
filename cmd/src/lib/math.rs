@@ -1,3 +1,11 @@
+use serde::Deserialize;
+
+#[derive(Deserialize)]
+pub struct GcdParameters {
+  n: u64,
+  m: u64,
+}
+
 pub fn gcd(a: u64, b: u64) -> u64 {
     let mut a = a;
     let mut b = b;
