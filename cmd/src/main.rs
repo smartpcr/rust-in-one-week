@@ -1,23 +1,35 @@
 use std::env;
 use std::str::FromStr;
 
-use lib::math::gcd;
+mod my;
+mod lib;
+
+fn function() {
+  println!("called `function()`");
+}
 
 fn main() {
+  my::function();
+
+  function();
+
+  my::indirect_access();
+
+  my::nested::function();
+
   let mut numbers = Vec::new();
-  for arg in env: args().skip(1) {
-    numbers.push(arg.parse::<u64>().expect("error parsing argument"));
+  for arg in env::args().skip(1) {
+    numbers.push(u64::from_str(&arg).expect("error parsing argument"));
   }
 
   if numbers.len() == 0 {
-    eprintln!("Usage: gcd NUMBER...");
-    std::process::exit(1);
+    panic!("Error: No numbers provided")
   }
 
-  let mut d = numbers[0];
-  for m in &numbers[1..] {
-    d = gcd(d, *m);
+  let mut result = numbers[0];
+  for i in 1..numbers.len() {
+    result = lib::math::gcd(result, numbers[i]);
   }
 
-  println!("The greatest common divisor of {:?} is {}", numbers, d);
+  println!("The greatest common divisor of the numbers of {:?} is {}", numbers, result);
 }
