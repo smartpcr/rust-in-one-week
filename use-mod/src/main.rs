@@ -1,12 +1,6 @@
-pub mod parent_folder {
-    pub mod folder1 {
-        pub mod mymodule;
-    }
-}
-
-use parent_folder::folder1::mymodule;
+mod parent_folder;
 
 fn main() {
     println!("Hello, world!");
-    mymodule::function();
+    parent_folder::folder1::mymodule::function();
 }
