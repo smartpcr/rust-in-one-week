@@ -1,26 +1,32 @@
+use chrono::{DateTime, TimeZone, Utc};
+
 struct Person {
   name: String,
-  birthDate: Date
+  birth_date: DateTime<Utc>
 }
 
 impl Person {
-  fn new(name: &String, birthDate: &Date) -> Person {
+  fn new(name: &String, birth_date: &DateTime<Utc>) -> Person {
     Person {
       name: name.to_string(),
-      birthDate: birthDate.clone(),
+      birth_date: birth_date.clone(),
     }
   }
 
   fn age(&self) -> u32 {
-    let now = Date::now();
-    let mut age = now.year - self.birthDate.year;
-    if now.month < self.birthDate.month {
-      age -= 1;
-    } else if now.month == self.birthDate.month {
-      if now.day < self.birthDate.day {
-        age -= 1;
-      }
-    }
-    age
+    let now = Utc::now();
+    let duration = now.signed_duration_since(self.birth_date);
+    duration.num_days() as u32 / 365
+  }
+}
+
+mod tests {
+  use super::*;
+
+  #[test]
+  fn age_should_be_15() {
+    let birthDate: DateTime<Utc> = Utc.with_ymd_and_hms(2007,11,3,0,0,0).unwrap();
+    let person = Person::new(&"John".to_string(), &birthDate);
+    assert_eq!(person.age(), 15);
   }
 }

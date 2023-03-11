@@ -1,3 +1,6 @@
+mod person;
+mod gcd;
+
 use ferris_says::say;
 use std::io::{stdout, BufWriter};
 
