@@ -18,7 +18,7 @@ pub fn gcd(a: u64, b: u64) -> u64 {
 }
 
 mod tests {
-    use crate::parent_folder::folder1::mymodule::gcd;
+    use crate::lib::math::gcd::gcd;
 
     #[test]
     fn test_gcd() {

@@ -1,1 +1,1 @@
-pub mod mymodule;
+pub mod gcd;
