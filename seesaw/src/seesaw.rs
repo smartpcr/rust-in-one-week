@@ -1,6 +1,14 @@
-use std::arch::asm;
 use rand::Rng;
 
+trait Comparable {
+    fn cmp(&self, other: &Self) -> std::cmp::Ordering;
+}
+
+trait Equatable {
+    fn equals(&self, other: &Self) -> bool;
+}
+
+#[derive(Debug, Clone)]
 struct Person {
     id: u8,
     weight: u32,
@@ -15,7 +23,19 @@ impl Person {
     }
 }
 
-fn  weigh(p1: &Person, p2: &Person) -> u8 {
+impl Comparable for Person {
+    fn cmp(&self, other: &Self) -> std::cmp::Ordering {
+        self.age.cmp(&other.age)
+    }
+}
+
+impl Equatable for Person {
+    fn equals(&self, other: &Self) -> bool {
+        self.name == other.name && self.age == other.age
+    }
+}
+
+fn weigh(p1: &Person, p2: &Person) -> i8 {
     iif(p1.weight==p2.weight, 0, iif(p1.weight>p2.weight, 1, -1))
 }
 
