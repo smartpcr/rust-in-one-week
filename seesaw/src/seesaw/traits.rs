@@ -17,6 +17,25 @@ impl From<Ordering> for CompResult {
     }
 }
 
+impl PartialEq for CompResult {
+    fn eq(&self, other: &Self) -> bool {
+        match self {
+            CompResult::Less => match other {
+                CompResult::Less => true,
+                _ => false,
+            },
+            CompResult::Equal => match other {
+                CompResult::Equal => true,
+                _ => false,
+            },
+            CompResult::Greater => match other {
+                CompResult::Greater => true,
+                _ => false,
+            },
+        }
+    }
+}
+
 impl Display for CompResult {
     fn fmt(&self, f: &mut Formatter) -> std::fmt::Result {
         match self {
@@ -28,7 +47,7 @@ impl Display for CompResult {
 }
 
 pub trait Comparable {
-    fn cmp(&self, other: &Self) -> CompResult;
+    fn compare_to(&self, other: &Self) -> CompResult;
 }
 
 pub trait Equatable {

@@ -1,7 +1,8 @@
 use std::cmp::Ordering;
+use std::fmt::{Display, Formatter};
 use crate::seesaw::traits::{Comparable, CompResult, Equatable};
 
-#[derive(Debug, Clone)]
+#[derive(Debug, Copy, Clone)]
 pub struct Person {
     pub id: u8,
     pub weight: u32,
@@ -16,12 +17,12 @@ impl Person {
     }
 
     pub fn weigh(p1: Person, p2: &Person) -> CompResult {
-        p1.cmp(p2)
+        p1.compare_to(p2)
     }
 }
 
 impl Comparable for Person {
-    fn cmp(&self, other: &Self) -> CompResult {
+    fn compare_to(&self, other: &Self) -> CompResult {
         CompResult::from(self.weight.cmp(&other.weight))
     }
 }
@@ -29,5 +30,11 @@ impl Comparable for Person {
 impl Equatable for Person {
     fn equals(&self, other: &Self) -> bool {
         self.id == other.id
+    }
+}
+
+impl ToString for Person {
+    fn to_string(&self) -> String {
+        format!("Person {{ id: {}, weight: {} }}", self.id, self.weight)
     }
 }
