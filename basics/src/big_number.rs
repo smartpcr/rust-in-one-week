@@ -1,4 +1,4 @@
-struct big_number {
+struct BigNumber {
     number: u64,
 }
 
@@ -6,7 +6,7 @@ pub trait Display {
     fn display(&self) -> String;
 }
 
-impl Display for big_number {
+impl Display for BigNumber {
     fn display(&self) -> String {
         let string = format!("{:?}", self.number);
         string
