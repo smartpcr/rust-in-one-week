@@ -1,14 +1,8 @@
-pub(crate) fn gcd(mut n: u64, mut m: u64) -> u64 {
-  assert!(n != 0 && m != 0);
-  while m != n {
-    if m < n {
-      let t = m;
-      m = n;
-      n = t;
-    }
-    m = m % n;
+pub(crate) fn gcd(n: u64, m: u64) -> u64 {
+  if m == 0 {
+    return n;
   }
-  m // Return the final value of m
+  gcd(m, n % m)
 }
 
 #[cfg(test)]

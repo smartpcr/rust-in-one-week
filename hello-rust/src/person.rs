@@ -25,8 +25,9 @@ mod tests {
 
   #[test]
   fn age_should_be_15() {
-    let birth_date: DateTime<Utc> = Utc.with_ymd_and_hms(2007, 11, 3, 0, 0, 0).unwrap();
-    let person = Person::new(&"John".to_string(), &birth_date);
-    assert_eq!(person.age(), 15);
+    let birth_date: DateTime<Utc> = Utc.with_ymd_and_hms(2000, 2, 29, 0, 0, 0).unwrap();
+    let person = Person::new(&"Leap".to_string(), &birth_date);
+    let expected_age = (Utc::now().signed_duration_since(birth_date).num_days() / 365) as u32;
+    assert_eq!(person.age(), expected_age);
   }
 }
