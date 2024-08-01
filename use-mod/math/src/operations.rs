@@ -1,16 +1,16 @@
-pub fn add(left: u64, right: u64) -> u64 {
+pub fn add(left: f64, right: f64) -> f64 {
     left + right
 }
 
-pub fn subtract(left: u64, right: u64) -> u64 {
+pub fn subtract(left: f64, right: f64) -> f64 {
     left - right
 }
 
-pub fn multiply(left: u64, right: u64) -> u64 {
+pub fn multiply(left: f64, right: f64) -> f64 {
     left * right
 }
 
-pub fn divide(left: u64, right: u64) -> u64 {
+pub fn divide(left: f64, right: f64) -> f64 {
     left / right
 }
 
@@ -26,31 +26,35 @@ pub fn gcd(a: u64, b: u64) -> u64 {
 }
 
 #[cfg(test)]
-mod tests {
+mod test {
+    use crate::numbers::get_two_numbers;
     use super::*;
+    
+    const A: f64 = 2.0;
+    const B: f64 = 2.0;
 
     #[test]
-    fn add_should_work() {
-        let result = add(2, 2);
-        assert_eq!(result, 4);
+    fn test_add_should_work() {
+        let result = add(A, B);
+        assert_eq!(result, 4f64);
     }
 
     #[test]
-    fn subtract_should_work() {
-        let result = subtract(2, 2);
-        assert_eq!(result, 0);
+    fn test_subtract_should_work() {
+        let result = subtract(A, B);
+        assert_eq!(result, 0f64);
     }
 
     #[test]
-    fn multiply_should_work() {
-        let result = multiply(2, 2);
-        assert_eq!(result, 4);
+    fn test_multiply_should_work() {
+        let result = multiply(A, B);
+        assert_eq!(result, 4f64);
     }
 
     #[test]
-    fn divide_should_work() {
-        let result = divide(2, 2);
-        assert_eq!(result, 1);
+    fn test_divide_should_work() {
+        let result = divide(A, B);
+        assert_eq!(result, 1f64);
     }
 
     #[test]
