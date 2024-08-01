@@ -1,0 +1,12 @@
+[workspace]
+resolver = "2"
+members = [
+    "basics",
+    "cmd",
+    "hello-rust",
+    "use-mod",
+    "quick-replace",
+    "mandelbrot",
+    "seesaw",
+    "web-with-prometheus",
+]
