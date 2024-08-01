@@ -1,9 +1,8 @@
+mod my;
+
 use std::env;
 use std::str::FromStr;
 use actix_web::{web, App, HttpResponse, HttpServer};
-
-mod my;
-mod lib;
 
 fn function() {
   println!("called `function()`");
@@ -46,7 +45,7 @@ fn main() {
 
   let mut result = numbers[0];
   for i in 1..numbers.len() {
-    result = lib::math::gcd(result, numbers[i]);
+    result = math::operations::gcd(result, numbers[i]);
   }
 
   println!("The greatest common divisor of the numbers of {:?} is {}", numbers, result);
