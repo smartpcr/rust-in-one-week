@@ -1,6 +1,6 @@
 [workspace]
 resolver = "2"
-members = [
+members = [ "OTel",
     "basics",
     "cmd",
     "hello-rust",
