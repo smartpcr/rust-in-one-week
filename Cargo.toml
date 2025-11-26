@@ -9,4 +9,5 @@ members = [
     "mandelbrot",
     "seesaw",
     "web-with-prometheus",
+    "api",
 ]
