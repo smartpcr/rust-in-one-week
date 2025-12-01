@@ -1,0 +1,10 @@
+[package]
+name = "OTel"
+version = "0.1.0"
+edition = "2021"
+
+[dependencies]
+opentelemetry = "0.24.0"
+opentelemetry-stdout = { version = "0.5.0", features = ["trace"] }
+opentelemetry_sdk = { version = "0.24.1" }
+tokio = { version = "1.39.2", features = ["full"] }

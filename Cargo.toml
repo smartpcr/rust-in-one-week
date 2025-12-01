@@ -1,14 +1,13 @@
 [workspace]
 resolver = "2"
-members = [
+members = [ "OTel",
     "basics",
-    "clus",
     "cmd",
+    "clus",
     "hello-rust",
-    "use-mod",
-    "quick-replace",
     "mandelbrot",
+    "quick-replace",
     "seesaw",
+    "use-mod",
     "web-with-prometheus",
-    "api",
 ]
