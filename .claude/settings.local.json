@@ -14,7 +14,8 @@
       "WebFetch(domain:pkg.go.dev)",
       "Bash(git add:*)",
       "Bash(git commit:*)",
-      "Bash(cargo search:*)"
+      "Bash(cargo search:*)",
+      "Bash(rustc:*)"
     ],
     "deny": [],
     "ask": []
