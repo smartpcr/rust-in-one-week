@@ -1,0 +1,144 @@
+name: CI
+
+on:
+  push:
+    branches: [main, master]
+  pull_request:
+    branches: [main, master]
+
+env:
+  CARGO_TERM_COLOR: always
+
+jobs:
+  # Build and test on Linux (for cross-platform modules)
+  build-linux:
+    name: Build & Test (Linux)
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+
+      - name: Install Rust toolchain
+        uses: dtolnay/rust-toolchain@stable
+
+      - name: Cache cargo registry
+        uses: actions/cache@v4
+        with:
+          path: |
+            ~/.cargo/registry
+            ~/.cargo/git
+            target
+          key: ${{ runner.os }}-cargo-${{ hashFiles('**/Cargo.lock') }}
+          restore-keys: |
+            ${{ runner.os }}-cargo-
+
+      - name: Build all modules
+        run: cargo build --workspace --verbose
+
+      - name: Run tests (excluding Windows-only)
+        run: cargo test --workspace --verbose
+
+  # Build and test on Windows (for Windows-specific modules)
+  build-windows:
+    name: Build & Test (Windows)
+    runs-on: windows-latest
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+
+      - name: Install Rust toolchain
+        uses: dtolnay/rust-toolchain@stable
+
+      - name: Cache cargo registry
+        uses: actions/cache@v4
+        with:
+          path: |
+            ~/.cargo/registry
+            ~/.cargo/git
+            target
+          key: ${{ runner.os }}-cargo-${{ hashFiles('**/Cargo.lock') }}
+          restore-keys: |
+            ${{ runner.os }}-cargo-
+
+      - name: Build all modules
+        run: cargo build --workspace --verbose
+
+      - name: Run tests (excluding cluster tests)
+        run: cargo test --workspace --verbose
+
+  # Windows Server with Failover Cluster for clus module integration tests
+  build-windows-cluster:
+    name: Build & Test (Windows Server + Failover Cluster)
+    runs-on: self-hosted
+    # Requires a self-hosted runner with:
+    # - Windows Server 2019/2022
+    # - Failover Clustering feature installed
+    # - Runner configured with cluster admin privileges
+    # Label your self-hosted runner with: windows, cluster
+    # To set up: Settings > Actions > Runners > New self-hosted runner
+    if: github.event_name == 'push' || github.event.pull_request.head.repo.full_name == github.repository
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+
+      - name: Install Rust toolchain
+        uses: dtolnay/rust-toolchain@stable
+
+      - name: Verify Failover Cluster feature
+        shell: powershell
+        run: |
+          $feature = Get-WindowsFeature -Name Failover-Clustering
+          if ($feature.InstallState -ne 'Installed') {
+            Write-Error "Failover Clustering feature is not installed"
+            exit 1
+          }
+          Write-Host "Failover Clustering feature is installed"
+
+          # Check if cluster service is running
+          $service = Get-Service -Name ClusSvc -ErrorAction SilentlyContinue
+          if ($service -and $service.Status -eq 'Running') {
+            Write-Host "Cluster service is running"
+          } else {
+            Write-Warning "Cluster service is not running - integration tests may fail"
+          }
+
+      - name: Cache cargo registry
+        uses: actions/cache@v4
+        with:
+          path: |
+            ~/.cargo/registry
+            ~/.cargo/git
+            target
+          key: ${{ runner.os }}-cargo-cluster-${{ hashFiles('**/Cargo.lock') }}
+          restore-keys: |
+            ${{ runner.os }}-cargo-cluster-
+
+      - name: Build clus module
+        run: cargo build -p clus --verbose
+
+      - name: Run clus unit tests
+        run: cargo test -p clus --verbose
+
+      - name: Run clus integration tests (cluster required)
+        run: cargo test -p clus --verbose -- --ignored
+        continue-on-error: true  # May fail if cluster is not properly configured
+
+  # Lint and format check
+  lint:
+    name: Lint & Format
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+
+      - name: Install Rust toolchain
+        uses: dtolnay/rust-toolchain@stable
+        with:
+          components: rustfmt,clippy
+
+      - name: Check formatting
+        run: cargo fmt --all -- --check
+
+      - name: Run Clippy
+        run: cargo clippy --workspace -- -D warnings
+        continue-on-error: true  # Don't fail on clippy warnings for now

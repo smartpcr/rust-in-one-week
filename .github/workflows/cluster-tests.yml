@@ -1,0 +1,164 @@
+name: Cluster Integration Tests
+
+on:
+  push:
+    branches: [main, master]
+    paths:
+      - 'clus/**'
+      - '.github/workflows/cluster-tests.yml'
+  pull_request:
+    branches: [main, master]
+    paths:
+      - 'clus/**'
+      - '.github/workflows/cluster-tests.yml'
+  workflow_dispatch:  # Allow manual trigger
+
+env:
+  CARGO_TERM_COLOR: always
+
+jobs:
+  cluster-tests:
+    name: Cluster Integration Tests
+    # This job requires a self-hosted Windows Server runner with Failover Clustering
+    #
+    # Prerequisites for the self-hosted runner:
+    # 1. Windows Server 2019 or 2022
+    # 2. Failover Clustering feature installed:
+    #    Install-WindowsFeature -Name Failover-Clustering -IncludeManagementTools
+    # 3. Node must be part of a failover cluster or have access to one
+    # 4. Runner service account must have cluster admin privileges
+    # 5. Label the runner with: self-hosted, windows, cluster
+    #
+    # To set up a self-hosted runner:
+    # 1. Go to repository Settings > Actions > Runners
+    # 2. Click "New self-hosted runner"
+    # 3. Follow instructions for Windows
+    # 4. Add labels: windows, cluster
+    runs-on: [self-hosted, windows, cluster]
+
+    # Only run for trusted code (not from forks)
+    if: github.event_name == 'push' || github.event_name == 'workflow_dispatch' || github.event.pull_request.head.repo.full_name == github.repository
+
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+
+      - name: Install Rust toolchain
+        uses: dtolnay/rust-toolchain@stable
+
+      - name: System Information
+        shell: powershell
+        run: |
+          Write-Host "=== System Information ==="
+          Write-Host "Computer Name: $env:COMPUTERNAME"
+          Write-Host "OS: $((Get-CimInstance Win32_OperatingSystem).Caption)"
+          Write-Host "OS Version: $((Get-CimInstance Win32_OperatingSystem).Version)"
+
+      - name: Verify Failover Cluster Prerequisites
+        shell: powershell
+        run: |
+          Write-Host "=== Checking Failover Clustering Feature ==="
+          $feature = Get-WindowsFeature -Name Failover-Clustering
+          if ($feature.InstallState -ne 'Installed') {
+            Write-Error "FATAL: Failover Clustering feature is not installed"
+            Write-Host "Install with: Install-WindowsFeature -Name Failover-Clustering -IncludeManagementTools"
+            exit 1
+          }
+          Write-Host "✓ Failover Clustering feature is installed"
+
+          Write-Host ""
+          Write-Host "=== Checking Cluster Service ==="
+          $service = Get-Service -Name ClusSvc -ErrorAction SilentlyContinue
+          if (-not $service) {
+            Write-Error "FATAL: Cluster service (ClusSvc) not found"
+            exit 1
+          }
+
+          if ($service.Status -ne 'Running') {
+            Write-Warning "Cluster service is not running (Status: $($service.Status))"
+            Write-Host "Attempting to start cluster service..."
+            Start-Service -Name ClusSvc -ErrorAction SilentlyContinue
+            Start-Sleep -Seconds 5
+            $service = Get-Service -Name ClusSvc
+          }
+
+          if ($service.Status -eq 'Running') {
+            Write-Host "✓ Cluster service is running"
+          } else {
+            Write-Error "FATAL: Could not start cluster service"
+            exit 1
+          }
+
+          Write-Host ""
+          Write-Host "=== Cluster Information ==="
+          try {
+            $cluster = Get-Cluster -ErrorAction Stop
+            Write-Host "✓ Connected to cluster: $($cluster.Name)"
+
+            Write-Host ""
+            Write-Host "Cluster Nodes:"
+            Get-ClusterNode | ForEach-Object {
+              Write-Host "  - $($_.Name): $($_.State)"
+            }
+
+            Write-Host ""
+            Write-Host "Cluster Groups:"
+            Get-ClusterGroup | ForEach-Object {
+              Write-Host "  - $($_.Name): $($_.State) on $($_.OwnerNode)"
+            }
+          } catch {
+            Write-Error "FATAL: Could not connect to cluster: $_"
+            exit 1
+          }
+
+      - name: Cache cargo registry
+        uses: actions/cache@v4
+        with:
+          path: |
+            ~/.cargo/registry
+            ~/.cargo/git
+            target
+          key: ${{ runner.os }}-cargo-cluster-${{ hashFiles('**/Cargo.lock') }}
+          restore-keys: |
+            ${{ runner.os }}-cargo-cluster-
+
+      - name: Build clus module
+        run: cargo build -p clus --verbose
+
+      - name: Run clus unit tests
+        run: cargo test -p clus --verbose
+
+      - name: Run clus integration tests
+        shell: powershell
+        run: |
+          Write-Host "=== Running Cluster Integration Tests ==="
+          Write-Host "These tests require a working failover cluster"
+          Write-Host ""
+
+          # Run ignored tests (integration tests that require cluster)
+          cargo test -p clus --verbose -- --ignored --test-threads=1
+        env:
+          RUST_BACKTRACE: 1
+
+      - name: Build and run examples
+        shell: powershell
+        run: |
+          Write-Host "=== Building Examples ==="
+          cargo build -p clus --examples --verbose
+
+          Write-Host ""
+          Write-Host "=== Running list_cluster example ==="
+          cargo run -p clus --example list_cluster
+        continue-on-error: true  # Examples may fail depending on cluster state
+
+  # Fallback job for environments without a cluster runner
+  cluster-tests-skip:
+    name: Cluster Tests (Skipped - No Runner)
+    runs-on: ubuntu-latest
+    if: github.event_name == 'pull_request' && github.event.pull_request.head.repo.full_name != github.repository
+    steps:
+      - name: Skip notice
+        run: |
+          echo "::notice::Cluster integration tests are skipped for external PRs"
+          echo "These tests require a self-hosted Windows Server runner with Failover Clustering"
+          echo "Maintainers will run these tests after reviewing the PR"

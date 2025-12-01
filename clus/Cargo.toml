@@ -1,0 +1,30 @@
+[package]
+name = "clus"
+version = "0.1.0"
+edition = "2021"
+description = "Rust bindings for Windows Failover Cluster API"
+readme = "README.md"
+
+[lib]
+name = "clus"
+path = "src/lib.rs"
+
+[[example]]
+name = "list_cluster"
+path = "examples/list_cluster.rs"
+
+[[example]]
+name = "move_vm"
+path = "examples/move_vm.rs"
+
+[target.'cfg(windows)'.dependencies]
+windows = { version = "0.62.2", features = [
+    "Win32_Networking_Clustering",
+    "Win32_Foundation",
+    "Win32_System_Registry",
+] }
+
+[dependencies]
+thiserror = "2.0.17"
+
+[dev-dependencies]
