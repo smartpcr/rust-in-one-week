@@ -1,4 +1,3 @@
-use std::task::Context;
 use opentelemetry::{
     global,
     trace::{TraceError, Tracer, TracerProvider as _},
@@ -27,7 +26,11 @@ async fn main() -> Result<(), TraceError> {
     Ok(())
 }
 
-async fn do_work<T: Tracer>(tracer: &T) {
+async fn do_work<T>(tracer: &T)
+where
+    T: Tracer,
+    T::Span: Send + Sync + 'static,
+{
     tracer.in_span("do_work", |cx| async {
         // sleep for a bit to simulate work
         sleep(Duration::from_millis(100)).await;
