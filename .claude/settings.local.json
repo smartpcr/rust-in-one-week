@@ -2,7 +2,16 @@
   "permissions": {
     "allow": [
       "Bash(cargo build:*)",
-      "Bash(cargo test:*)"
+      "Bash(cargo test:*)",
+      "Bash(cargo +nightly build:*)",
+      "Bash(rustup run nightly cargo build:*)",
+      "WebSearch",
+      "WebFetch(domain:github.com)",
+      "WebFetch(domain:docs.rs)",
+      "Bash(cargo check:*)",
+      "Bash(cargo doc:*)",
+      "WebFetch(domain:microsoft.github.io)",
+      "WebFetch(domain:pkg.go.dev)"
     ],
     "deny": [],
     "ask": []

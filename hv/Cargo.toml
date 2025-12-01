@@ -1,0 +1,60 @@
+[package]
+name = "hv"
+version = "0.1.0"
+edition = "2021"
+description = "Rust library for Windows Hyper-V management via HCS and Windows APIs"
+readme = "README.md"
+
+[lib]
+name = "hv"
+path = "src/lib.rs"
+
+[[example]]
+name = "list_vms"
+path = "examples/list_vms.rs"
+
+[[example]]
+name = "vm_lifecycle"
+path = "examples/vm_lifecycle.rs"
+
+[[example]]
+name = "gpu_info"
+path = "examples/gpu_info.rs"
+
+[[example]]
+name = "gpu_passthrough"
+path = "examples/gpu_passthrough.rs"
+
+[[example]]
+name = "create_vm"
+path = "examples/create_vm.rs"
+
+[[example]]
+name = "quick_vm"
+path = "examples/quick_vm.rs"
+
+[target.'cfg(windows)'.dependencies]
+# Windows API bindings - includes HCS (Host Compute System), VHD, and Device APIs
+windows = { version = "0.62.2", features = [
+    "Win32_Foundation",
+    "Win32_System_Com",
+    "Win32_Storage_Vhd",
+    "Win32_Storage_FileSystem",
+    "Win32_Security",
+    "Win32_System_Ioctl",
+    "Win32_System_IO",
+    "Win32_System_Threading",
+    "Win32_System_Hypervisor",
+    "Win32_System_HostComputeSystem",
+    "Win32_Devices_DeviceAndDriverInstallation",
+    "Win32_System_Registry",
+] }
+
+serde = { version = "1.0", features = ["derive"] }
+serde_json = "1.0"
+uuid = { version = "1.0", features = ["v4"] }
+
+[dependencies]
+thiserror = "2.0"
+
+[dev-dependencies]
