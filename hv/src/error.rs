@@ -31,6 +31,9 @@ pub enum HvError {
     #[error("Permission denied: {0}")]
     PermissionDenied(String),
 
+    #[error("Failed to connect to Hyper-V WMI: {0}")]
+    ConnectionFailed(String),
+
     #[error("Timeout waiting for operation: {0}")]
     Timeout(String),
 
