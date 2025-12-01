@@ -1,12 +1,14 @@
 [workspace]
 resolver = "2"
-members = [ "OTel",
+members = [
+    "api",
     "basics",
-    "cmd",
     "clus",
+    "cmd",
     "hello-rust",
     "hv",
     "mandelbrot",
+    "OTel",
     "quick-replace",
     "seesaw",
     "use-mod",
