@@ -11,7 +11,10 @@
       "Bash(cargo check:*)",
       "Bash(cargo doc:*)",
       "WebFetch(domain:microsoft.github.io)",
-      "WebFetch(domain:pkg.go.dev)"
+      "WebFetch(domain:pkg.go.dev)",
+      "Bash(git add:*)",
+      "Bash(git commit:*)",
+      "Bash(cargo search:*)"
     ],
     "deny": [],
     "ask": []
