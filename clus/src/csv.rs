@@ -11,7 +11,6 @@ use crate::error::{ClusError, Result};
 use crate::resource::Resource;
 use crate::utils::{from_wide, to_wide};
 use windows::core::{PCWSTR, PWSTR};
-use windows::Win32::Foundation::BOOL;
 use windows::Win32::Networking::Clustering::{
     ClusterResourceControl, ClusterSharedVolumeSetSnapshotState,
     CLCTL_STORAGE_GET_SHARED_VOLUME_INFO, CLCTL_STORAGE_IS_SHARED_VOLUME,
@@ -123,8 +122,8 @@ impl Csv {
     /// `true` if the path is on a CSV, `false` otherwise
     pub fn is_path_on_csv(path: &str) -> bool {
         let wide_path = to_wide(path);
-        let result: BOOL = unsafe { ClusterIsPathOnSharedVolume(PCWSTR(wide_path.as_ptr())) };
-        result.as_bool()
+        let result = unsafe { ClusterIsPathOnSharedVolume(PCWSTR(wide_path.as_ptr())) };
+        result.0 != 0
     }
 
     /// Get the CSV volume path for a given file path

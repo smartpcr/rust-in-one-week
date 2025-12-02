@@ -13,7 +13,7 @@ use windows::Win32::Devices::DeviceAndDriverInstallation::{
     SetupDiDestroyDeviceInfoList, SetupDiEnumDeviceInfo, SetupDiGetClassDevsW,
     SetupDiGetDeviceInstanceIdW, SetupDiGetDeviceRegistryPropertyW, DIGCF_PRESENT,
     HDEVINFO, SP_DEVINFO_DATA, SPDRP_DEVICEDESC, SPDRP_DRIVER, SPDRP_FRIENDLYNAME,
-    SPDRP_HARDWAREID, SPDRP_LOCATION_INFORMATION, SPDRP_MFG,
+    SPDRP_HARDWAREID, SPDRP_LOCATION_INFORMATION, SPDRP_MFG, SETUP_DI_REGISTRY_PROPERTY,
 };
 use windows::Win32::Foundation::ERROR_NO_MORE_ITEMS;
 
@@ -123,11 +123,8 @@ pub fn enumerate_gpus() -> Result<Vec<GpuInfo>> {
             PCWSTR::null(),
             None,
             DIGCF_PRESENT,
-        );
-
-        if device_info_set.is_invalid() {
-            return Err(HvError::OperationFailed("Failed to get device info set".to_string()));
-        }
+        )
+        .map_err(|e| HvError::OperationFailed(format!("Failed to get device info set: {}", e)))?;
 
         let _guard = DeviceInfoSet(device_info_set);
 
@@ -140,7 +137,7 @@ pub fn enumerate_gpus() -> Result<Vec<GpuInfo>> {
 
             let result = SetupDiEnumDeviceInfo(device_info_set, index, &mut dev_info_data);
             if result.is_err() {
-                let err = windows::core::Error::from_win32();
+                let err = windows::core::Error::from_thread();
                 if err.code() == ERROR_NO_MORE_ITEMS.into() {
                     break;
                 }
@@ -217,7 +214,7 @@ unsafe fn get_device_instance_id(device_info_set: HDEVINFO, dev_info_data: &SP_D
 unsafe fn get_device_property(
     device_info_set: HDEVINFO,
     dev_info_data: &SP_DEVINFO_DATA,
-    property: u32,
+    property: SETUP_DI_REGISTRY_PROPERTY,
 ) -> Option<String> {
     let mut buffer = vec![0u8; 4096];
     let mut required_size = 0u32;

@@ -88,7 +88,7 @@ impl Cluster {
     /// Enumerate all nodes in the cluster.
     pub fn nodes(&self) -> Result<Vec<Node>> {
         let mut nodes = Vec::new();
-        let enum_handle = unsafe { ClusterOpenEnum(self.handle, CLUSTER_ENUM_NODE.0) };
+        let enum_handle = unsafe { ClusterOpenEnum(self.handle, CLUSTER_ENUM_NODE.0 as u32) };
 
         if enum_handle.0 == 0 {
             return Err(ClusError::WindowsError(WinError::from_thread()));
@@ -152,7 +152,7 @@ impl Cluster {
     /// Enumerate all resources in the cluster.
     pub fn resources(&self) -> Result<Vec<Resource>> {
         let mut resources = Vec::new();
-        let enum_handle = unsafe { ClusterOpenEnum(self.handle, CLUSTER_ENUM_RESOURCE.0) };
+        let enum_handle = unsafe { ClusterOpenEnum(self.handle, CLUSTER_ENUM_RESOURCE.0 as u32) };
 
         if enum_handle.0 == 0 {
             return Err(ClusError::WindowsError(WinError::from_thread()));
@@ -215,7 +215,7 @@ impl Cluster {
     /// Enumerate all groups in the cluster.
     pub fn groups(&self) -> Result<Vec<Group>> {
         let mut groups = Vec::new();
-        let enum_handle = unsafe { ClusterOpenEnum(self.handle, CLUSTER_ENUM_GROUP.0) };
+        let enum_handle = unsafe { ClusterOpenEnum(self.handle, CLUSTER_ENUM_GROUP.0 as u32) };
 
         if enum_handle.0 == 0 {
             return Err(ClusError::WindowsError(WinError::from_thread()));
@@ -278,7 +278,7 @@ impl Cluster {
 
 impl Drop for Cluster {
     fn drop(&mut self) {
-        if !self.handle.0 == 0 {
+        if self.handle.0 != 0 {
             unsafe {
                 let _ = CloseCluster(self.handle);
             }

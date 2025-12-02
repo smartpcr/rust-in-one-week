@@ -9,8 +9,8 @@ use std::ffi::OsStr;
 use std::os::windows::ffi::OsStrExt;
 use std::ptr;
 use std::time::Duration;
-use windows::core::PCWSTR;
-use windows::Win32::Foundation::{CloseHandle, HANDLE, HRESULT, PWSTR};
+use windows::core::{HRESULT, PCWSTR, PWSTR};
+use windows::Win32::Foundation::{CloseHandle, HANDLE};
 use windows::Win32::System::HostComputeSystem::{
     HcsCloseComputeSystem, HcsCloseOperation, HcsCreateComputeSystem, HcsCreateOperation,
     HcsEnumerateComputeSystems, HcsGetComputeSystemProperties, HcsGetOperationResult,
@@ -72,7 +72,7 @@ impl HcsOperation {
     pub fn wait(&self, timeout_ms: u32) -> Result<String> {
         unsafe {
             let mut result_doc: PWSTR = PWSTR::null();
-            let hr = HcsWaitForOperationResult(self.0, timeout_ms, &mut result_doc);
+            let hr = HcsWaitForOperationResult(self.0, timeout_ms, Some(&mut result_doc));
 
             if hr.is_err() {
                 if !result_doc.0.is_null() {
@@ -100,7 +100,7 @@ impl HcsOperation {
     pub fn result(&self) -> Result<String> {
         unsafe {
             let mut result_doc: PWSTR = PWSTR::null();
-            let hr = HcsGetOperationResult(self.0, &mut result_doc);
+            let hr = HcsGetOperationResult(self.0, Some(&mut result_doc));
 
             if hr.is_err() {
                 if !result_doc.0.is_null() {
@@ -339,21 +339,22 @@ pub fn enumerate_compute_systems(query: Option<&str>) -> Result<Vec<ComputeSyste
 /// Open an existing compute system by ID
 pub fn open_compute_system(id: &str) -> Result<HcsSystem> {
     let id_wide = to_wide(id);
-    let mut system = HCS_SYSTEM::default();
 
-    unsafe {
-        let hr = HcsOpenComputeSystem(
+    let system = unsafe {
+        let result = HcsOpenComputeSystem(
             PCWSTR(id_wide.as_ptr()),
             0x1F0FFF, // GENERIC_ALL access
-            &mut system,
         );
-        if hr.is_err() {
-            return Err(HvError::HcsError(format!(
-                "Failed to open compute system {}: {:?}",
-                id, hr
-            )));
+        match result {
+            Ok(sys) => sys,
+            Err(e) => {
+                return Err(HvError::HcsError(format!(
+                    "Failed to open compute system {}: {:?}",
+                    id, e
+                )));
+            }
         }
-    }
+    };
 
     Ok(HcsSystem(system))
 }
@@ -363,23 +364,24 @@ pub fn create_compute_system(id: &str, configuration: &str) -> Result<HcsSystem>
     let id_wide = to_wide(id);
     let config_wide = to_wide(configuration);
     let op = HcsOperation::new()?;
-    let mut system = HCS_SYSTEM::default();
 
-    unsafe {
-        let hr = HcsCreateComputeSystem(
+    let system = unsafe {
+        let result = HcsCreateComputeSystem(
             PCWSTR(id_wide.as_ptr()),
             PCWSTR(config_wide.as_ptr()),
             op.handle(),
             None, // No security descriptor
-            &mut system,
         );
-        if hr.is_err() {
-            return Err(HvError::HcsError(format!(
-                "Failed to create compute system {}: {:?}",
-                id, hr
-            )));
+        match result {
+            Ok(sys) => sys,
+            Err(e) => {
+                return Err(HvError::HcsError(format!(
+                    "Failed to create compute system {}: {:?}",
+                    id, e
+                )));
+            }
         }
-    }
+    };
 
     // Wait for creation to complete
     op.wait(DEFAULT_TIMEOUT.as_millis() as u32)?;
@@ -580,6 +582,7 @@ impl VmConfiguration {
         self.virtual_machine.devices = Some(DevicesConfig {
             scsi: Some(ScsiConfig { attachments }),
             network_adapters: None,
+            gpu: None,
         });
 
         self

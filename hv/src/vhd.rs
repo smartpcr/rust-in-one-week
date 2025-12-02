@@ -295,7 +295,7 @@ impl Vhd {
         let handle = self.open(VIRTUAL_DISK_ACCESS_ALL)?;
 
         unsafe {
-            let result = CompactVirtualDisk(handle.as_raw(), COMPACT_VIRTUAL_DISK_FLAG(0), None);
+            let result = CompactVirtualDisk(handle.as_raw(), COMPACT_VIRTUAL_DISK_FLAG(0), None, None);
             check_win32_error(result, "Failed to compact VHD")?;
         }
 
