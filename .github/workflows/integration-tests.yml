@@ -1,0 +1,118 @@
+name: Integration Tests
+
+on:
+  push:
+    branches: [main, master]
+    paths:
+      - 'clus/**'
+      - 'hv/**'
+      - 'api/**'
+      - '.github/workflows/integration-tests.yml'
+  pull_request:
+    branches: [main, master]
+    paths:
+      - 'clus/**'
+      - 'hv/**'
+      - 'api/**'
+      - '.github/workflows/integration-tests.yml'
+  workflow_dispatch:  # Allow manual trigger
+
+env:
+  CARGO_TERM_COLOR: always
+
+jobs:
+  integration-tests:
+    name: Integration Tests
+    # This job requires a self-hosted Windows Server runner with Hyper-V and Failover Clustering
+    #
+    # Prerequisites for the self-hosted runner:
+    # 1. Windows Server 2019, 2022 or 2025
+    # 2. Hyper-V role installed:
+    #    Install-WindowsFeature -Name Hyper-V -IncludeManagementTools
+    # 3. Failover Clustering feature installed:
+    #    Install-WindowsFeature -Name Failover-Clustering -IncludeManagementTools
+    # 4. Node must be part of a failover cluster or have access to one
+    # 5. Runner service account must have admin privileges
+    runs-on: [windows-2025]
+
+    # Only run for trusted code (not from forks)
+    if: github.event_name == 'push' || github.event_name == 'workflow_dispatch' || github.event.pull_request.head.repo.full_name == github.repository
+
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+
+      - name: Install Rust toolchain
+        uses: dtolnay/rust-toolchain@stable
+        with:
+          toolchain: stable
+
+      - name: Setup MSVC Developer Environment
+        uses: ilammy/msvc-dev-cmd@v1
+
+      - name: Ensure PowerShell Core is installed
+        shell: cmd
+        run: |
+          pwsh --version || (
+            echo Installing PowerShell Core...
+            winget install --id Microsoft.PowerShell --source winget --accept-package-agreements --accept-source-agreements
+          )
+
+      - name: System Information
+        shell: pwsh
+        run: |
+          Write-Host "=== System Information ==="
+          Write-Host "Computer Name: $env:COMPUTERNAME"
+          Write-Host "OS: $((Get-CimInstance Win32_OperatingSystem).Caption)"
+          Write-Host "OS Version: $((Get-CimInstance Win32_OperatingSystem).Version)"
+
+      - name: Verify Windows Server Features
+        shell: pwsh
+        run: .github/scripts/verify-windows-features.ps1
+
+      - name: Cache cargo registry
+        uses: actions/cache@v4
+        with:
+          path: |
+            ~/.cargo/registry
+            ~/.cargo/git
+            target
+          key: ${{ runner.os }}-cargo-cluster-${{ hashFiles('**/Cargo.lock') }}
+          restore-keys: |
+            ${{ runner.os }}-cargo-cluster-
+
+      - name: Build workspace
+        run: cargo build --workspace --verbose
+
+      - name: Run unit tests
+        run: cargo test --workspace --verbose
+
+      - name: Run hv integration tests (Hyper-V required)
+        run: cargo test -p hv --verbose -- --ignored --test-threads=1
+        continue-on-error: true
+        env:
+          RUST_BACKTRACE: 1
+
+      - name: Run clus integration tests (cluster required)
+        run: cargo test -p clus --verbose -- --ignored --test-threads=1
+        continue-on-error: true
+        env:
+          RUST_BACKTRACE: 1
+
+      - name: Run api integration tests
+        run: cargo test -p api --verbose -- --ignored --test-threads=1
+        continue-on-error: true
+        env:
+          RUST_BACKTRACE: 1
+
+  # Fallback job for environments without a Windows Server runner
+  integration-tests-skip:
+    name: Integration Tests (Skipped - No Runner)
+    runs-on: ubuntu-latest
+    if: github.event_name == 'pull_request' && github.event.pull_request.head.repo.full_name != github.repository
+    steps:
+      - name: Skip notice
+        run: |
+          echo "::notice::Integration tests are skipped for external PRs"
+          echo "These tests require a self-hosted Windows Server runner with Hyper-V and Failover Clustering"
+          echo "Maintainers will run these tests after reviewing the PR"

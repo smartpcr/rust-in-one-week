@@ -145,18 +145,46 @@ impl Vm {
 
     /// Gets the current state of the VM
     pub fn state(&mut self) -> Result<VmState> {
-        let system = self.ensure_open()?;
-
-        let properties = system.get_properties(None)?;
-
-        if let Some(props_json) = properties {
-            let props: VmProperties = serde_json::from_str(&props_json)?;
-            if let Some(state_str) = props.state {
-                return Ok(VmState::from_hcs_state(&state_str));
+        // Try HCS first
+        if let Ok(system) = self.ensure_open() {
+            if let Ok(Some(props_json)) = system.get_properties(None) {
+                if let Ok(props) = serde_json::from_str::<VmProperties>(&props_json) {
+                    if let Some(state_str) = props.state {
+                        let state = VmState::from_hcs_state(&state_str);
+                        if state != VmState::Unknown {
+                            return Ok(state);
+                        }
+                    }
+                }
             }
         }
 
-        Ok(VmState::Unknown)
+        // Fallback to PowerShell for traditional Hyper-V VMs
+        self.state_via_powershell()
+    }
+
+    /// Gets VM state using PowerShell (fallback)
+    fn state_via_powershell(&self) -> Result<VmState> {
+        use std::process::Command;
+
+        let output = Command::new("powershell")
+            .args([
+                "-NoProfile",
+                "-Command",
+                &format!(
+                    "(Get-VM -Name '{}' -ErrorAction SilentlyContinue).State",
+                    self.name
+                ),
+            ])
+            .output()
+            .map_err(|e| HvError::OperationFailed(format!("Failed to query VM state: {}", e)))?;
+
+        if !output.status.success() {
+            return Ok(VmState::Unknown);
+        }
+
+        let stdout = String::from_utf8_lossy(&output.stdout);
+        Ok(VmState::from_hcs_state(stdout.trim()))
     }
 
     /// Starts the VM

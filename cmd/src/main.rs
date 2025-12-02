@@ -1,6 +1,11 @@
 mod my;
 
-use actix_web::{web, App, HttpResponse, HttpServer, Responder};
+use axum::{
+    extract::Form,
+    response::Html,
+    routing::{get, post},
+    Router,
+};
 use math::{numbers::GcdParameters, operations};
 use std::env;
 use std::str::FromStr;
@@ -9,8 +14,8 @@ fn function() {
     println!("called `function()`");
 }
 
-#[actix_web::main]
-async fn main() -> std::io::Result<()> {
+#[tokio::main]
+async fn main() {
     //#region: my
     my::function();
 
@@ -51,19 +56,20 @@ async fn main() -> std::io::Result<()> {
     //#endregion
 
     //#region: web
-    let server = HttpServer::new(|| {
-        App::new()
-            .route("/", web::get().to(get_index))
-            .route("/gcd", web::post().to(post_gcd))
-    })
-    .bind("127.0.0.1:3000")?;
+    let app = Router::new()
+        .route("/", get(get_index))
+        .route("/gcd", post(post_gcd));
+
+    let listener = tokio::net::TcpListener::bind("127.0.0.1:3000")
+        .await
+        .unwrap();
     println!("Serving on http://localhost:3000...");
-    server.run().await
+    axum::serve(listener, app).await.unwrap();
     //#endregion
 }
 
-async fn get_index() -> impl Responder {
-    HttpResponse::Ok().body(
+async fn get_index() -> Html<&'static str> {
+    Html(
         r#"
     <html>
       <head><title>GCD Calculator</title></head>
@@ -79,11 +85,9 @@ async fn get_index() -> impl Responder {
     )
 }
 
-async fn post_gcd(form: web::Form<GcdParameters>) -> impl Responder {
+async fn post_gcd(Form(form): Form<GcdParameters>) -> Html<String> {
     if (form.n == 0) || (form.m == 0) {
-        return HttpResponse::BadRequest()
-            .content_type("text/html")
-            .body("Error: Computing the GCD with zero is boring.");
+        return Html("Error: Computing the GCD with zero is boring.".to_string());
     }
 
     let response = format!(
@@ -93,5 +97,5 @@ async fn post_gcd(form: web::Form<GcdParameters>) -> impl Responder {
         operations::gcd(form.n, form.m)
     );
 
-    HttpResponse::Ok().content_type("text/html").body(response)
+    Html(response)
 }

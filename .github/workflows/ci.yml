@@ -71,16 +71,15 @@ jobs:
       - name: Run tests (excluding cluster tests)
         run: cargo test --workspace --verbose
 
-  # Windows Server with Failover Cluster for clus module integration tests
-  build-windows-cluster:
-    name: Build & Test (Windows Server + Failover Cluster)
+  # Windows Server with Failover Cluster and Hyper-V for integration tests
+  build-windows-server:
+    name: Build & Test (Windows Server + Hyper-V + Cluster)
     runs-on: [windows-2025]
     # Requires a self-hosted runner with:
-    # - Windows Server 2019/2022
+    # - Windows Server 2019/2022/2025
+    # - Hyper-V role installed
     # - Failover Clustering feature installed
-    # - Runner configured with cluster admin privileges
-    # Label your self-hosted runner with: self-hosted, windows, cluster
-    # To set up: Settings > Actions > Runners > New self-hosted runner
+    # - Runner configured with admin privileges
     if: github.event_name == 'push' || github.event.pull_request.head.repo.full_name == github.repository
     steps:
       - name: Checkout repository
@@ -89,28 +88,22 @@ jobs:
       - name: Install Rust toolchain
         uses: dtolnay/rust-toolchain@stable
         with:
-          toolchain: 1.91.1
+          toolchain: stable
 
       - name: Setup MSVC Developer Environment
         uses: ilammy/msvc-dev-cmd@v1
 
-      - name: Verify Failover Cluster feature
-        shell: powershell
+      - name: Ensure PowerShell Core is installed
+        shell: cmd
         run: |
-          $feature = Get-WindowsFeature -Name Failover-Clustering
-          if ($feature.InstallState -ne 'Installed') {
-            Write-Error "Failover Clustering feature is not installed"
-            exit 1
-          }
-          Write-Host "Failover Clustering feature is installed"
+          pwsh --version || (
+            echo Installing PowerShell Core...
+            winget install --id Microsoft.PowerShell --source winget --accept-package-agreements --accept-source-agreements
+          )
 
-          # Check if cluster service is running
-          $service = Get-Service -Name ClusSvc -ErrorAction SilentlyContinue
-          if ($service -and $service.Status -eq 'Running') {
-            Write-Host "Cluster service is running"
-          } else {
-            Write-Warning "Cluster service is not running - integration tests may fail"
-          }
+      - name: Verify Windows Server features
+        shell: pwsh
+        run: .github/scripts/verify-windows-features.ps1
 
       - name: Cache cargo registry
         uses: actions/cache@v4
@@ -119,19 +112,27 @@ jobs:
             ~/.cargo/registry
             ~/.cargo/git
             target
-          key: ${{ runner.os }}-cargo-cluster-${{ hashFiles('**/Cargo.lock') }}
+          key: ${{ runner.os }}-cargo-server-${{ hashFiles('**/Cargo.lock') }}
           restore-keys: |
-            ${{ runner.os }}-cargo-cluster-
+            ${{ runner.os }}-cargo-server-
 
-      - name: Build clus module
-        run: cargo build -p clus --verbose
+      - name: Build workspace
+        run: cargo build --workspace --verbose
 
-      - name: Run clus unit tests
-        run: cargo test -p clus --verbose
+      - name: Run unit tests
+        run: cargo test --workspace --verbose
+
+      - name: Run hv integration tests (Hyper-V required)
+        run: cargo test -p hv --verbose -- --ignored
+        continue-on-error: true
 
       - name: Run clus integration tests (cluster required)
         run: cargo test -p clus --verbose -- --ignored
-        continue-on-error: true  # May fail if cluster is not properly configured
+        continue-on-error: true
+
+      - name: Run api integration tests
+        run: cargo test -p api --verbose -- --ignored
+        continue-on-error: true
 
   # Lint and format check
   lint:

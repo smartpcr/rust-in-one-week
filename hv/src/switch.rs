@@ -231,6 +231,66 @@ impl std::fmt::Debug for VirtualSwitch {
     }
 }
 
+/// Helper to deserialize SwitchType from either integer or string
+fn deserialize_switch_type<'de, D>(deserializer: D) -> std::result::Result<Option<u32>, D::Error>
+where
+    D: serde::Deserializer<'de>,
+{
+    use serde::de::{self, Visitor};
+
+    struct SwitchTypeVisitor;
+
+    impl<'de> Visitor<'de> for SwitchTypeVisitor {
+        type Value = Option<u32>;
+
+        fn expecting(&self, formatter: &mut std::fmt::Formatter) -> std::fmt::Result {
+            formatter.write_str("an integer or string representing switch type")
+        }
+
+        fn visit_i64<E>(self, value: i64) -> std::result::Result<Self::Value, E>
+        where
+            E: de::Error,
+        {
+            Ok(Some(value as u32))
+        }
+
+        fn visit_u64<E>(self, value: u64) -> std::result::Result<Self::Value, E>
+        where
+            E: de::Error,
+        {
+            Ok(Some(value as u32))
+        }
+
+        fn visit_str<E>(self, value: &str) -> std::result::Result<Self::Value, E>
+        where
+            E: de::Error,
+        {
+            match value.to_lowercase().as_str() {
+                "private" => Ok(Some(0)),
+                "internal" => Ok(Some(1)),
+                "external" => Ok(Some(2)),
+                _ => Ok(None),
+            }
+        }
+
+        fn visit_none<E>(self) -> std::result::Result<Self::Value, E>
+        where
+            E: de::Error,
+        {
+            Ok(None)
+        }
+
+        fn visit_unit<E>(self) -> std::result::Result<Self::Value, E>
+        where
+            E: de::Error,
+        {
+            Ok(None)
+        }
+    }
+
+    deserializer.deserialize_any(SwitchTypeVisitor)
+}
+
 /// Information about a virtual switch from enumeration
 #[derive(Debug, Clone, Serialize, Deserialize)]
 #[serde(rename_all = "PascalCase")]
@@ -239,8 +299,8 @@ pub struct SwitchInfo {
     pub id: Option<String>,
     #[serde(default)]
     pub name: Option<String>,
-    #[serde(default)]
-    pub switch_type: Option<String>,
+    #[serde(default, deserialize_with = "deserialize_switch_type")]
+    pub switch_type: Option<u32>,
     #[serde(default)]
     pub allow_management_o_s: Option<bool>,
     #[serde(default)]
@@ -288,14 +348,12 @@ pub fn enumerate_switches() -> Result<Vec<VirtualSwitch>> {
         .filter_map(|info| {
             let id = info.id?;
             let name = info.name.unwrap_or_else(|| id.clone());
-            let switch_type = info
-                .switch_type
-                .as_ref()
-                .map(|s| match s.to_lowercase().as_str() {
-                    "external" => SwitchType::External,
-                    "internal" => SwitchType::Internal,
-                    _ => SwitchType::Private,
-                });
+            let switch_type = info.switch_type.map(|t| match t {
+                0 => SwitchType::Private,
+                1 => SwitchType::Internal,
+                2 => SwitchType::External,
+                _ => SwitchType::Private,
+            });
             Some(VirtualSwitch::from_info(id, name, switch_type))
         })
         .collect())
@@ -333,14 +391,12 @@ pub fn get_switch(name: &str) -> Result<VirtualSwitch> {
         .id
         .ok_or_else(|| HvError::SwitchNotFound(name.to_string()))?;
     let switch_name = info.name.unwrap_or_else(|| name.to_string());
-    let switch_type = info
-        .switch_type
-        .as_ref()
-        .map(|s| match s.to_lowercase().as_str() {
-            "external" => SwitchType::External,
-            "internal" => SwitchType::Internal,
-            _ => SwitchType::Private,
-        });
+    let switch_type = info.switch_type.map(|t| match t {
+        0 => SwitchType::Private,
+        1 => SwitchType::Internal,
+        2 => SwitchType::External,
+        _ => SwitchType::Private,
+    });
 
     Ok(VirtualSwitch::from_info(id, switch_name, switch_type))
 }
