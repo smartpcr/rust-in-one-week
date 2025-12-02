@@ -2,7 +2,7 @@
 # -Ccontrol-flow-guard: CFG - Prevents exploits that redirect code execution (required by OneBranch security scans)
 # -Ctarget-feature=+crt-static: Static CRT - Bundles C runtime into binary; required for Spectre-mitigated CRT linking
 [target.'cfg(target_os = "windows")']
-rustflags = ["-Cehcont-guard", "-Ccontrol-flow-guard", "-Ctarget-feature=+crt-static"]
+rustflags = ["-Ccontrol-flow-guard", "-Ctarget-feature=+crt-static"]
 
 # -DYNAMICBASE: ASLR - Randomizes memory layout to prevent exploits
 # CETCOMPAT: Intel CET Shadow Stack - Hardware-enforced return address protection; modern CPUs validate return addresses
