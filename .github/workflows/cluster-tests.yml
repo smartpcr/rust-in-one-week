@@ -107,7 +107,7 @@ jobs:
               Write-Host "  - $($_.Name): $($_.State) on $($_.OwnerNode)"
             }
           } catch {
-            Write-Error "FATAL: Could not connect to cluster: $_"
+            Write-Error "FATAL: Could not connect to cluster: $($_)"
             exit 1
           }
 
