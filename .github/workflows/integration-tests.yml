@@ -45,7 +45,7 @@ jobs:
       - name: Install Rust toolchain
         uses: dtolnay/rust-toolchain@stable
         with:
-          toolchain: stable
+          toolchain: 1.91.1
 
       - name: Setup MSVC Developer Environment
         uses: ilammy/msvc-dev-cmd@v1
