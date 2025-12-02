@@ -86,21 +86,7 @@ jobs:
 
       - name: Verify Failover Cluster feature
         shell: powershell
-        run: |
-          $feature = Get-WindowsFeature -Name Failover-Clustering
-          if ($feature.InstallState -ne 'Installed') {
-            Write-Error "Failover Clustering feature is not installed"
-            exit 1
-          }
-          Write-Host "Failover Clustering feature is installed"
-
-          # Check if cluster service is running
-          $service = Get-Service -Name ClusSvc -ErrorAction SilentlyContinue
-          if ($service -and $service.Status -eq 'Running') {
-            Write-Host "Cluster service is running"
-          } else {
-            Write-Warning "Cluster service is not running - integration tests may fail"
-          }
+        run: .\.github\scripts\verify-cluster.ps1
 
       - name: Cache cargo registry
         uses: actions/cache@v4

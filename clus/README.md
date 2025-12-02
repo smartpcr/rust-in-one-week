@@ -161,3 +161,26 @@ cargo run -p clus --example csv_info -- maintenance "Cluster Disk 1" off
 
 - Windows with Failover Clustering feature installed
 - Appropriate cluster permissions
+
+### Verifying a lab or CI runner
+
+These quick checks help confirm the runner really has a local cluster before running CI jobs:
+
+```powershell
+Get-Cluster
+Get-ClusterNode
+Get-Service ClusSvc   # Should report Running
+
+# Confirm the static address you plan to use is free
+Test-Connection 172.16.0.100 -Count 1 -Quiet  # Expect False if unused
+```
+
+If any of these checks fail on a GitHub-hosted runner, switch the workflow to a self-hosted
+Windows Server runner that already has the Failover Clustering feature enabled and is part of
+the target cluster.
+
+### Why GitHub Actions run 19843620672/56856879143 failed
+
+- The `cluster-tests` job currently targets the GitHub-hosted `windows-2025` image (`runs-on: [windows-2025]`). That image does not include the Failover Clustering feature or a configured cluster, even though the workflow comments state the job is intended for a self-hosted Windows Server cluster runner.【F:.github/workflows/cluster-tests.yml†L22-L38】
+- The first step after system info enforces those prerequisites by checking the Failover Clustering feature, the `ClusSvc` service, and connectivity to a cluster. On the hosted runner the feature check fails, so the workflow exits with a fatal error before any Rust build or tests run.【F:.github/workflows/cluster-tests.yml†L57-L112】
+- Fix: point `runs-on` to a properly prepared self-hosted runner (labels: `self-hosted, windows, cluster`) or gate the cluster checks to skip when such a runner is unavailable.【F:.github/workflows/cluster-tests.yml†L22-L38】【F:.github/workflows/cluster-tests.yml†L57-L112】
