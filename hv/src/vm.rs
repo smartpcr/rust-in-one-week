@@ -3,7 +3,7 @@
 //! Uses windows-rs HCS bindings directly for VM operations.
 
 use crate::error::{HvError, Result};
-use crate::hcs::{self, ComputeSystemInfo, HcsSystem, VmConfiguration, DEFAULT_TIMEOUT};
+use crate::hcs::{self, ComputeSystemInfo, HcsSystem};
 use serde::{Deserialize, Serialize};
 
 /// VM state enumeration

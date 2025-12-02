@@ -5,11 +5,11 @@
 use crate::disk::{self, DvdDrive, FileSystem, HardDiskDrive, PartitionStyle, WindowsEdition};
 use crate::error::{HvError, Result};
 use crate::gpu::{self, AssignableDevice, DdaSupportInfo, GpuInfo, GpuPartitionAdapter};
-use crate::hcs::{self, ComputeSystemInfo, VmConfiguration};
+use crate::hcs::{self, VmConfiguration};
 use crate::snapshot::{self, Snapshot, SnapshotType};
 use crate::switch::{self, SwitchType, VirtualSwitch};
-use crate::vhd::{self, Vhd, VhdFormat, VhdType};
-use crate::vm::{Vm, VmGeneration, VmState};
+use crate::vhd::{self, Vhd, VhdType};
+use crate::vm::{Vm, VmGeneration};
 use serde::{Deserialize, Serialize};
 use std::process::Command;
 

@@ -7,10 +7,8 @@ use crate::error::{HvError, Result};
 use serde::{Deserialize, Serialize};
 use std::ffi::OsStr;
 use std::os::windows::ffi::OsStrExt;
-use std::ptr;
 use std::time::Duration;
-use windows::core::{HRESULT, PCWSTR, PWSTR};
-use windows::Win32::Foundation::{CloseHandle, HANDLE};
+use windows::core::{PCWSTR, PWSTR};
 use windows::Win32::System::HostComputeSystem::{
     HcsCloseComputeSystem, HcsCloseOperation, HcsCreateComputeSystem, HcsCreateOperation,
     HcsEnumerateComputeSystems, HcsGetComputeSystemProperties, HcsGetOperationResult,
