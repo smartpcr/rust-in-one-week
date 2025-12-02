@@ -133,10 +133,7 @@ pub fn mount_iso(
     controller_number: Option<u32>,
     controller_location: Option<u32>,
 ) -> Result<()> {
-    let mut cmd = format!(
-        "Set-VMDvdDrive -VMName '{}' -Path '{}'",
-        vm_name, iso_path
-    );
+    let mut cmd = format!("Set-VMDvdDrive -VMName '{}' -Path '{}'", vm_name, iso_path);
 
     if let Some(num) = controller_number {
         cmd.push_str(&format!(" -ControllerNumber {}", num));
@@ -225,13 +222,21 @@ pub fn set_boot_order(vm_name: &str, boot_devices: &[&str]) -> Result<()> {
     // boot_devices can be: "VHD", "DVD", "Network", "File"
     let devices_str = boot_devices
         .iter()
-        .map(|d| {
-            match *d {
-                "DVD" | "CD" => "$(Get-VMDvdDrive -VMName '".to_string() + vm_name + "' | Select-Object -First 1)",
-                "VHD" | "HardDrive" => "$(Get-VMHardDiskDrive -VMName '".to_string() + vm_name + "' | Select-Object -First 1)",
-                "Network" => "$(Get-VMNetworkAdapter -VMName '".to_string() + vm_name + "' | Select-Object -First 1)",
-                _ => d.to_string(),
+        .map(|d| match *d {
+            "DVD" | "CD" => {
+                "$(Get-VMDvdDrive -VMName '".to_string() + vm_name + "' | Select-Object -First 1)"
             }
+            "VHD" | "HardDrive" => {
+                "$(Get-VMHardDiskDrive -VMName '".to_string()
+                    + vm_name
+                    + "' | Select-Object -First 1)"
+            }
+            "Network" => {
+                "$(Get-VMNetworkAdapter -VMName '".to_string()
+                    + vm_name
+                    + "' | Select-Object -First 1)"
+            }
+            _ => d.to_string(),
         })
         .collect::<Vec<_>>()
         .join(", ");
@@ -393,7 +398,9 @@ pub fn initialize_windows_vhd(vhd_path: &str, windows_label: Option<&str>) -> Re
     let output = Command::new("powershell")
         .args(["-NoProfile", "-Command", &cmd])
         .output()
-        .map_err(|e| HvError::OperationFailed(format!("Failed to initialize Windows VHD: {}", e)))?;
+        .map_err(|e| {
+            HvError::OperationFailed(format!("Failed to initialize Windows VHD: {}", e))
+        })?;
 
     if !output.status.success() {
         let stderr = String::from_utf8_lossy(&output.stderr);
@@ -601,9 +608,7 @@ pub fn create_vhdx_from_iso(
 
         Write-Host "VHDX created successfully: {}"
         "#,
-        vhdx_path, size_bytes, vhdx_path,
-        iso_path, edition_index,
-        iso_path, vhdx_path, vhdx_path
+        vhdx_path, size_bytes, vhdx_path, iso_path, edition_index, iso_path, vhdx_path, vhdx_path
     );
 
     let output = Command::new("powershell")
@@ -645,8 +650,7 @@ pub fn quick_create_windows_vm(
         New-VM -Name '{}' -Generation 2 -MemoryStartupBytes {}MB -VHDPath '{}'
         Set-VM -Name '{}' -ProcessorCount {}
         "#,
-        vm_name, memory_mb, vhdx_path,
-        vm_name, cpu_count
+        vm_name, memory_mb, vhdx_path, vm_name, cpu_count
     );
 
     let output = Command::new("powershell")
@@ -803,7 +807,9 @@ pub fn remove_hard_disk_drive(
     let output = Command::new("powershell")
         .args(["-NoProfile", "-Command", &cmd])
         .output()
-        .map_err(|e| HvError::OperationFailed(format!("Failed to remove hard disk drive: {}", e)))?;
+        .map_err(|e| {
+            HvError::OperationFailed(format!("Failed to remove hard disk drive: {}", e))
+        })?;
 
     if !output.status.success() {
         let stderr = String::from_utf8_lossy(&output.stderr);

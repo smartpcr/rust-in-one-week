@@ -33,9 +33,7 @@ pub async fn cluster_connect(Path(name): Path<String>) -> ApiResult<String> {
 }
 
 #[cfg(windows)]
-pub async fn cluster_list_nodes(
-    Query(params): Query<ClusterNameQuery>,
-) -> ApiResult<Vec<NodeDto>> {
+pub async fn cluster_list_nodes(Query(params): Query<ClusterNameQuery>) -> ApiResult<Vec<NodeDto>> {
     let cluster = Cluster::open(params.name.as_deref())
         .map_err(|e| api_error(StatusCode::INTERNAL_SERVER_ERROR, &e.to_string()))?;
     let nodes = cluster
@@ -346,10 +344,7 @@ pub async fn cluster_list_nodes(_: Query<ClusterNameQuery>) -> ApiResult<Vec<Nod
 }
 
 #[cfg(not(windows))]
-pub async fn cluster_get_node(
-    _: Path<String>,
-    _: Query<ClusterNameQuery>,
-) -> ApiResult<NodeDto> {
+pub async fn cluster_get_node(_: Path<String>, _: Query<ClusterNameQuery>) -> ApiResult<NodeDto> {
     Err(not_supported())
 }
 
@@ -375,10 +370,7 @@ pub async fn cluster_list_groups(_: Query<ClusterNameQuery>) -> ApiResult<Vec<Gr
 }
 
 #[cfg(not(windows))]
-pub async fn cluster_get_group(
-    _: Path<String>,
-    _: Query<ClusterNameQuery>,
-) -> ApiResult<GroupDto> {
+pub async fn cluster_get_group(_: Path<String>, _: Query<ClusterNameQuery>) -> ApiResult<GroupDto> {
     Err(not_supported())
 }
 

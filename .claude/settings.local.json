@@ -17,7 +17,8 @@
       "Bash(cargo search:*)",
       "Bash(rustc:*)",
       "Bash(cargo --version:*)",
-      "WebFetch(domain:crates.io)"
+      "WebFetch(domain:crates.io)",
+      "Bash(cargo fmt:*)"
     ],
     "deny": [],
     "ask": []

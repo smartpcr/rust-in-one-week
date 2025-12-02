@@ -6,7 +6,7 @@ use axum::{
 };
 use tower::ServiceExt;
 
-use api::{create_router, AppState, ApiResponse};
+use api::{create_router, ApiResponse, AppState};
 use std::sync::Arc;
 
 fn create_test_app() -> axum::Router {

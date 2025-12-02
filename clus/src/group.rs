@@ -9,9 +9,9 @@ use crate::utils::{from_wide, to_wide};
 use windows::core::{Error as WinError, PCWSTR, PWSTR};
 use windows::Win32::Networking::Clustering::{
     CloseClusterGroup, ClusterGroupFailed, ClusterGroupOffline, ClusterGroupOnline,
-    ClusterGroupPartialOnline, ClusterGroupPending, ClusterGroupStateUnknown,
-    GetClusterGroupState, MoveClusterGroup, OfflineClusterGroup, OnlineClusterGroup,
-    OpenClusterGroup, CLUSTER_GROUP_STATE, HGROUP, HNODE,
+    ClusterGroupPartialOnline, ClusterGroupPending, ClusterGroupStateUnknown, GetClusterGroupState,
+    MoveClusterGroup, OfflineClusterGroup, OnlineClusterGroup, OpenClusterGroup,
+    CLUSTER_GROUP_STATE, HGROUP, HNODE,
 };
 
 /// Represents a group (role) in a Windows Failover Cluster
@@ -75,8 +75,7 @@ impl Group {
     pub fn state(&self) -> Result<(GroupState, Option<String>)> {
         let mut size: u32 = 0;
 
-        let state =
-            unsafe { GetClusterGroupState(self.handle, None, Some(&mut size)) };
+        let state = unsafe { GetClusterGroupState(self.handle, None, Some(&mut size)) };
 
         if state == ClusterGroupStateUnknown && size == 0 {
             return Ok((GroupState::Unknown(0), None));
@@ -85,8 +84,13 @@ impl Group {
         size += 1;
         let mut buffer: Vec<u16> = vec![0; size as usize];
 
-        let state =
-            unsafe { GetClusterGroupState(self.handle, Some(PWSTR(buffer.as_mut_ptr())), Some(&mut size)) };
+        let state = unsafe {
+            GetClusterGroupState(
+                self.handle,
+                Some(PWSTR(buffer.as_mut_ptr())),
+                Some(&mut size),
+            )
+        };
 
         let owner_node = from_wide(buffer.as_ptr());
         let owner = if owner_node.is_empty() {

@@ -22,12 +22,21 @@ mod hyperv_tests {
         let hyperv = HyperV::connect().expect("Failed to connect");
         let info = hyperv.host_info().expect("Failed to get host info");
 
-        assert!(!info.computer_name.is_empty(), "Computer name should not be empty");
-        assert!(info.logical_processor_count > 0, "Should have at least 1 CPU");
+        assert!(
+            !info.computer_name.is_empty(),
+            "Computer name should not be empty"
+        );
+        assert!(
+            info.logical_processor_count > 0,
+            "Should have at least 1 CPU"
+        );
         assert!(info.memory_capacity_bytes > 0, "Should have memory");
         println!("Host: {}", info.computer_name);
         println!("CPUs: {}", info.logical_processor_count);
-        println!("Memory: {} GB", info.memory_capacity_bytes / 1024 / 1024 / 1024);
+        println!(
+            "Memory: {} GB",
+            info.memory_capacity_bytes / 1024 / 1024 / 1024
+        );
     }
 
     /// Test listing VMs
@@ -39,7 +48,11 @@ mod hyperv_tests {
 
         println!("Found {} VMs", vms.len());
         for vm in &vms {
-            println!("  - {}: {:?}", vm.name(), vm.state().unwrap_or(VmState::Unknown));
+            println!(
+                "  - {}: {:?}",
+                vm.name(),
+                vm.state().unwrap_or(VmState::Unknown)
+            );
         }
     }
 
@@ -52,7 +65,11 @@ mod hyperv_tests {
 
         println!("Found {} switches", switches.len());
         for switch in &switches {
-            println!("  - {}: {:?}", switch.name(), switch.switch_type().unwrap_or(SwitchType::Private));
+            println!(
+                "  - {}: {:?}",
+                switch.name(),
+                switch.switch_type().unwrap_or(SwitchType::Private)
+            );
         }
     }
 

@@ -27,9 +27,9 @@ pub fn gcd(a: u64, b: u64) -> u64 {
 
 #[cfg(test)]
 mod test {
-    use crate::numbers::get_two_numbers;
     use super::*;
-    
+    use crate::numbers::get_two_numbers;
+
     const A: f64 = 2.0;
     const B: f64 = 2.0;
 

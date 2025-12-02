@@ -15,7 +15,8 @@ impl Arguments {
 
         if args.len() < 4 {
             eprintln!("{} - not enough arguments", args[0].green());
-            eprintln!("Usage: {} {} {} {} {} {}",
+            eprintln!(
+                "Usage: {} {} {} {} {} {}",
                 args[0].green(),
                 "target".yellow(),
                 "replacement".yellow(),
@@ -49,13 +50,14 @@ pub fn parse_args() -> Arguments {
     let args: Vec<String> = env::args().skip(1).collect();
     if args.len() < 4 {
         eprintln!("{} - not enough arguments", "quick-replace".green());
-        eprintln!("Usage: {} {} {} {} {} {}",
-                  "quick-replace".green(),
-                  "target".yellow(),
-                  "replacement".yellow(),
-                  "filename".yellow(),
-                  "output".yellow(),
-                  "[optional]".blue()
+        eprintln!(
+            "Usage: {} {} {} {} {} {}",
+            "quick-replace".green(),
+            "target".yellow(),
+            "replacement".yellow(),
+            "filename".yellow(),
+            "output".yellow(),
+            "[optional]".blue()
         );
         std::process::exit(1);
     }

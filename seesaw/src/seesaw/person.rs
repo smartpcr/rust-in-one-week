@@ -1,6 +1,6 @@
+use crate::seesaw::traits::{CompResult, Comparable, Equatable};
 use std::cmp::Ordering;
 use std::fmt::{Display, Formatter};
-use crate::seesaw::traits::{Comparable, CompResult, Equatable};
 
 #[derive(Debug, Copy, Clone)]
 pub struct Person {
@@ -10,10 +10,7 @@ pub struct Person {
 
 impl Person {
     pub fn new(id: u8, weight: u32) -> Person {
-        Person {
-            id,
-            weight,
-        }
+        Person { id, weight }
     }
 
     pub fn weigh(p1: Person, p2: &Person) -> CompResult {

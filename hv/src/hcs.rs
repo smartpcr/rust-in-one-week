@@ -22,7 +22,10 @@ pub const DEFAULT_TIMEOUT: Duration = Duration::from_secs(300);
 
 /// Convert Rust string to wide string (UTF-16 null-terminated)
 fn to_wide(s: &str) -> Vec<u16> {
-    OsStr::new(s).encode_wide().chain(std::iter::once(0)).collect()
+    OsStr::new(s)
+        .encode_wide()
+        .chain(std::iter::once(0))
+        .collect()
 }
 
 /// Convert wide string pointer to Rust String
@@ -55,7 +58,9 @@ impl HcsOperation {
         unsafe {
             let op = HcsCreateOperation(None, None);
             if op.is_invalid() {
-                return Err(HvError::HcsError("Failed to create HCS operation".to_string()));
+                return Err(HvError::HcsError(
+                    "Failed to create HCS operation".to_string(),
+                ));
             }
             Ok(HcsOperation(op))
         }
@@ -76,10 +81,7 @@ impl HcsOperation {
                 if !result_doc.0.is_null() {
                     free_hcs_string(result_doc);
                 }
-                return Err(HvError::HcsError(format!(
-                    "HCS operation failed: {:?}",
-                    hr
-                )));
+                return Err(HvError::HcsError(format!("HCS operation failed: {:?}", hr)));
             }
 
             let result = if result_doc.0.is_null() {
@@ -157,7 +159,10 @@ impl HcsSystem {
         unsafe {
             let hr = HcsStartComputeSystem(self.0, op.handle(), options_ptr);
             if hr.is_err() {
-                return Err(HvError::HcsError(format!("Failed to start compute system: {:?}", hr)));
+                return Err(HvError::HcsError(format!(
+                    "Failed to start compute system: {:?}",
+                    hr
+                )));
             }
         }
 
@@ -177,7 +182,10 @@ impl HcsSystem {
         unsafe {
             let hr = HcsShutDownComputeSystem(self.0, op.handle(), options_ptr);
             if hr.is_err() {
-                return Err(HvError::HcsError(format!("Failed to shutdown compute system: {:?}", hr)));
+                return Err(HvError::HcsError(format!(
+                    "Failed to shutdown compute system: {:?}",
+                    hr
+                )));
             }
         }
 
@@ -192,7 +200,10 @@ impl HcsSystem {
         unsafe {
             let hr = HcsTerminateComputeSystem(self.0, op.handle(), PCWSTR::null());
             if hr.is_err() {
-                return Err(HvError::HcsError(format!("Failed to terminate compute system: {:?}", hr)));
+                return Err(HvError::HcsError(format!(
+                    "Failed to terminate compute system: {:?}",
+                    hr
+                )));
             }
         }
 
@@ -212,7 +223,10 @@ impl HcsSystem {
         unsafe {
             let hr = HcsPauseComputeSystem(self.0, op.handle(), options_ptr);
             if hr.is_err() {
-                return Err(HvError::HcsError(format!("Failed to pause compute system: {:?}", hr)));
+                return Err(HvError::HcsError(format!(
+                    "Failed to pause compute system: {:?}",
+                    hr
+                )));
             }
         }
 
@@ -227,7 +241,10 @@ impl HcsSystem {
         unsafe {
             let hr = HcsResumeComputeSystem(self.0, op.handle(), PCWSTR::null());
             if hr.is_err() {
-                return Err(HvError::HcsError(format!("Failed to resume compute system: {:?}", hr)));
+                return Err(HvError::HcsError(format!(
+                    "Failed to resume compute system: {:?}",
+                    hr
+                )));
             }
         }
 
@@ -247,7 +264,10 @@ impl HcsSystem {
         unsafe {
             let hr = HcsSaveComputeSystem(self.0, op.handle(), options_ptr);
             if hr.is_err() {
-                return Err(HvError::HcsError(format!("Failed to save compute system: {:?}", hr)));
+                return Err(HvError::HcsError(format!(
+                    "Failed to save compute system: {:?}",
+                    hr
+                )));
             }
         }
 
@@ -267,7 +287,10 @@ impl HcsSystem {
         unsafe {
             let hr = HcsGetComputeSystemProperties(self.0, op.handle(), query_ptr);
             if hr.is_err() {
-                return Err(HvError::HcsError(format!("Failed to get properties: {:?}", hr)));
+                return Err(HvError::HcsError(format!(
+                    "Failed to get properties: {:?}",
+                    hr
+                )));
             }
         }
 

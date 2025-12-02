@@ -14,7 +14,10 @@ fn main() {
     };
 
     let regex = regex::Regex::new(&args.target).unwrap();
-    match fs::write(&args.output, regex.replace_all(&data, &args.replacement).as_bytes()) {
+    match fs::write(
+        &args.output,
+        regex.replace_all(&data, &args.replacement).as_bytes(),
+    ) {
         Ok(_) => println!("Successfully replaced text in file"),
         Err(e) => {
             eprintln!("Error writing to file: {}", e);

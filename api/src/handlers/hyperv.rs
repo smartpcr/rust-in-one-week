@@ -603,7 +603,12 @@ pub async fn hyperv_initialize_vhd(Json(req): Json<InitVhdRequest>) -> ApiResult
         _ => hv::FileSystem::Ntfs,
     };
     let drive_letter = hv
-        .initialize_vhd(&req.path, partition_style, file_system, req.label.as_deref())
+        .initialize_vhd(
+            &req.path,
+            partition_style,
+            file_system,
+            req.label.as_deref(),
+        )
         .map_err(|e| api_error(StatusCode::INTERNAL_SERVER_ERROR, &e.to_string()))?;
     Ok(Json(ApiResponse::success(drive_letter)))
 }
@@ -635,8 +640,13 @@ pub async fn hyperv_create_vhdx_from_iso(
 ) -> ApiResult<&'static str> {
     let hv =
         HyperV::new().map_err(|e| api_error(StatusCode::INTERNAL_SERVER_ERROR, &e.to_string()))?;
-    hv.create_vhdx_from_iso(&req.iso_path, &req.vhdx_path, req.size_gb, req.edition_index)
-        .map_err(|e| api_error(StatusCode::INTERNAL_SERVER_ERROR, &e.to_string()))?;
+    hv.create_vhdx_from_iso(
+        &req.iso_path,
+        &req.vhdx_path,
+        req.size_gb,
+        req.edition_index,
+    )
+    .map_err(|e| api_error(StatusCode::INTERNAL_SERVER_ERROR, &e.to_string()))?;
     Ok(Json(ApiResponse::success("ok")))
 }
 
@@ -929,7 +939,10 @@ pub async fn hyperv_reset_vm(_: Path<String>) -> ApiResult<&'static str> {
 }
 
 #[cfg(not(windows))]
-pub async fn hyperv_export_vm(_: Path<String>, _: Json<ExportVmRequest>) -> ApiResult<&'static str> {
+pub async fn hyperv_export_vm(
+    _: Path<String>,
+    _: Json<ExportVmRequest>,
+) -> ApiResult<&'static str> {
     Err(not_supported())
 }
 
@@ -960,7 +973,10 @@ pub async fn hyperv_vm_dvd(_: Path<String>) -> ApiResult<Vec<DiskDto>> {
 }
 
 #[cfg(not(windows))]
-pub async fn hyperv_mount_iso(_: Path<String>, _: Json<MountIsoRequest>) -> ApiResult<&'static str> {
+pub async fn hyperv_mount_iso(
+    _: Path<String>,
+    _: Json<MountIsoRequest>,
+) -> ApiResult<&'static str> {
     Err(not_supported())
 }
 

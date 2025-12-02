@@ -101,8 +101,14 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
     println!("=== Comparison ===\n");
     println!("{:<20} {:<15} {:<15}", "Feature", "GPU-P", "DDA");
     println!("{}", "-".repeat(50));
-    println!("{:<20} {:<15} {:<15}", "Windows Client", "Yes", "No (Server)");
-    println!("{:<20} {:<15} {:<15}", "GPU Sharing", "Yes", "No (Exclusive)");
+    println!(
+        "{:<20} {:<15} {:<15}",
+        "Windows Client", "Yes", "No (Server)"
+    );
+    println!(
+        "{:<20} {:<15} {:<15}",
+        "GPU Sharing", "Yes", "No (Exclusive)"
+    );
     println!("{:<20} {:<15} {:<15}", "Performance", "~90%", "~100%");
     println!("{:<20} {:<15} {:<15}", "Hot-swap", "Yes", "No");
     println!(

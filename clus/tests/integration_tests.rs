@@ -5,7 +5,7 @@
 
 #[cfg(windows)]
 mod cluster_tests {
-    use clus::{Cluster, ClusError, GroupState, NodeState, ResourceState};
+    use clus::{ClusError, Cluster, GroupState, NodeState, ResourceState};
 
     /// Test opening a connection to the local cluster
     #[test]
@@ -64,14 +64,12 @@ mod cluster_tests {
         println!("Found {} resources", resources.len());
 
         for resource in &resources {
-            assert!(!resource.name().is_empty(), "Resource name should not be empty");
-            let (state, owner) = resource.state().expect("Failed to get resource state");
-            println!(
-                "Resource: {} - {:?} on {:?}",
-                resource.name(),
-                state,
-                owner
+            assert!(
+                !resource.name().is_empty(),
+                "Resource name should not be empty"
             );
+            let (state, owner) = resource.state().expect("Failed to get resource state");
+            println!("Resource: {} - {:?} on {:?}", resource.name(), state, owner);
 
             // Verify state is a known value
             match state {
@@ -249,10 +247,7 @@ mod cluster_tests {
         });
 
         if let Some(resource) = online_resource {
-            println!(
-                "Testing offline/online on resource: {}",
-                resource.name()
-            );
+            println!("Testing offline/online on resource: {}", resource.name());
 
             // Take offline
             let offline_result = resource.offline();
@@ -264,7 +259,10 @@ mod cluster_tests {
 
                 // Bring back online
                 let online_result = resource.online();
-                assert!(online_result.is_ok(), "Should be able to bring resource online");
+                assert!(
+                    online_result.is_ok(),
+                    "Should be able to bring resource online"
+                );
                 println!("Resource online initiated");
             } else {
                 println!("Could not take resource offline (may require admin privileges)");
@@ -303,9 +301,7 @@ mod cluster_tests {
             let current_owner_name = current_owner.as_deref().unwrap_or("");
 
             // Find a different node
-            let target_node = up_nodes
-                .iter()
-                .find(|n| n.name() != current_owner_name);
+            let target_node = up_nodes.iter().find(|n| n.name() != current_owner_name);
 
             if let Some(target) = target_node {
                 println!(
@@ -323,11 +319,7 @@ mod cluster_tests {
                     std::thread::sleep(std::time::Duration::from_secs(5));
 
                     let (new_state, new_owner) = group.state().expect("Failed to get state");
-                    println!(
-                        "Group is now {:?} on {:?}",
-                        new_state,
-                        new_owner
-                    );
+                    println!("Group is now {:?} on {:?}", new_state, new_owner);
                 } else {
                     println!("Could not move group (may require admin privileges)");
                 }
@@ -345,10 +337,7 @@ mod unit_tests {
     #[test]
     fn test_error_display() {
         let err = ClusError::OpenClusterFailed("TestCluster".to_string());
-        assert_eq!(
-            format!("{}", err),
-            "Failed to open cluster: TestCluster"
-        );
+        assert_eq!(format!("{}", err), "Failed to open cluster: TestCluster");
 
         let err = ClusError::NotFound("TestResource".to_string());
         assert_eq!(format!("{}", err), "Resource not found: TestResource");

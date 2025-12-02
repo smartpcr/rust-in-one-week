@@ -48,8 +48,7 @@ impl Resource {
     pub fn open(cluster: &Cluster, resource_name: &str) -> Result<Self> {
         let wide_name = to_wide(resource_name);
 
-        let handle =
-            unsafe { OpenClusterResource(cluster.handle(), PCWSTR(wide_name.as_ptr())) };
+        let handle = unsafe { OpenClusterResource(cluster.handle(), PCWSTR(wide_name.as_ptr())) };
 
         if handle.0 == 0 {
             return Err(ClusError::NotFound(resource_name.to_string()));
@@ -76,9 +75,8 @@ impl Resource {
         let mut size: u32 = 0;
 
         // Get required size for node name
-        let state = unsafe {
-            GetClusterResourceState(self.handle, None, Some(&mut size), None, None)
-        };
+        let state =
+            unsafe { GetClusterResourceState(self.handle, None, Some(&mut size), None, None) };
 
         if state == ClusterResourceStateUnknown && size == 0 {
             return Ok((ResourceState::Unknown(0), None));

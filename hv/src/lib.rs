@@ -27,9 +27,9 @@
 //! }
 //! ```
 
-mod error;
 #[cfg(windows)]
 mod disk;
+mod error;
 #[cfg(windows)]
 mod gpu;
 #[cfg(windows)]
@@ -45,11 +45,9 @@ mod vhd;
 #[cfg(windows)]
 mod vm;
 
-pub use error::{HvError, Result};
 #[cfg(windows)]
-pub use disk::{
-    DvdDrive, FileSystem, HardDiskDrive, PartitionStyle, WindowsEdition,
-};
+pub use disk::{DvdDrive, FileSystem, HardDiskDrive, PartitionStyle, WindowsEdition};
+pub use error::{HvError, Result};
 #[cfg(windows)]
 pub use gpu::{AssignableDevice, DdaSupportInfo, GpuInfo, GpuPartitionAdapter};
 #[cfg(windows)]

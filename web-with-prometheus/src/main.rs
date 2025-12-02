@@ -1,12 +1,12 @@
-#[macro_use] extern crate nickel;
-use prometheus_client::encoding::{EncodeLabelSet, EncodeLabelValue};
+#[macro_use]
+extern crate nickel;
+use nickel::{middleware, HttpRouter, Nickel};
 use prometheus_client::encoding::text::encode;
+use prometheus_client::encoding::{EncodeLabelSet, EncodeLabelValue};
 use prometheus_client::metrics::counter::Counter;
 use prometheus_client::metrics::family::Family;
 use prometheus_client::registry::Registry;
-use nickel::{Nickel, HttpRouter, middleware};
 use std::io::Write;
-
 
 #[derive(Debug, Clone, Hash, PartialEq, Eq, EncodeLabelSet)]
 struct Labels {
@@ -38,12 +38,15 @@ fn main() {
         http_requests.clone(),
     );
 
-    server.get("/metrics", middleware! {
-        http_requests.get_or_create(&Labels {
-            method: Method::GET,
-            path: "/metrics".to_string(),
-        }).inc();
-    });
+    server.get(
+        "/metrics",
+        middleware! {
+            http_requests.get_or_create(&Labels {
+                method: Method::GET,
+                path: "/metrics".to_string(),
+            }).inc();
+        },
+    );
 
     let mut buffer = String::new();
     encode(&mut buffer, &registry).unwrap();

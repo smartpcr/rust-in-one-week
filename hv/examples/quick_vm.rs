@@ -30,7 +30,10 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
             let vm_name = args.get(2).ok_or("Missing VM name")?;
             let template_path = args.get(3).ok_or("Missing template VHDX path")?;
 
-            let memory_mb: u64 = args.get(4).map(|s| s.parse().unwrap_or(4096)).unwrap_or(4096);
+            let memory_mb: u64 = args
+                .get(4)
+                .map(|s| s.parse().unwrap_or(4096))
+                .unwrap_or(4096);
             let cpu_count: u32 = args.get(5).map(|s| s.parse().unwrap_or(2)).unwrap_or(2);
 
             create_windows_vm(&hyperv, vm_name, template_path, memory_mb, cpu_count)?;
@@ -43,7 +46,10 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
             let vm_name = args.get(2).ok_or("Missing VM name")?;
             let template_path = args.get(3).ok_or("Missing template VHDX path")?;
 
-            let memory_mb: u64 = args.get(4).map(|s| s.parse().unwrap_or(2048)).unwrap_or(2048);
+            let memory_mb: u64 = args
+                .get(4)
+                .map(|s| s.parse().unwrap_or(2048))
+                .unwrap_or(2048);
             let cpu_count: u32 = args.get(5).map(|s| s.parse().unwrap_or(2)).unwrap_or(2);
 
             create_linux_vm(&hyperv, vm_name, template_path, memory_mb, cpu_count)?;
@@ -56,7 +62,10 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
             let vm_name = args.get(2).ok_or("Missing VM name")?;
             let parent_vhdx = args.get(3).ok_or("Missing parent VHDX path")?;
 
-            let memory_mb: u64 = args.get(4).map(|s| s.parse().unwrap_or(4096)).unwrap_or(4096);
+            let memory_mb: u64 = args
+                .get(4)
+                .map(|s| s.parse().unwrap_or(4096))
+                .unwrap_or(4096);
             let cpu_count: u32 = args.get(5).map(|s| s.parse().unwrap_or(2)).unwrap_or(2);
 
             create_windows_clone(&hyperv, vm_name, parent_vhdx, memory_mb, cpu_count)?;
@@ -69,7 +78,10 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
             let vm_name = args.get(2).ok_or("Missing VM name")?;
             let parent_vhdx = args.get(3).ok_or("Missing parent VHDX path")?;
 
-            let memory_mb: u64 = args.get(4).map(|s| s.parse().unwrap_or(2048)).unwrap_or(2048);
+            let memory_mb: u64 = args
+                .get(4)
+                .map(|s| s.parse().unwrap_or(2048))
+                .unwrap_or(2048);
             let cpu_count: u32 = args.get(5).map(|s| s.parse().unwrap_or(2)).unwrap_or(2);
 
             create_linux_clone(&hyperv, vm_name, parent_vhdx, memory_mb, cpu_count)?;
@@ -164,7 +176,13 @@ fn create_windows_vm(
 
     // Create VM
     println!("  Creating Gen2 VM...");
-    let vm = hyperv.create_vm(vm_name, memory_mb, cpu_count, VmGeneration::Gen2, Some(&vhdx_path))?;
+    let vm = hyperv.create_vm(
+        vm_name,
+        memory_mb,
+        cpu_count,
+        VmGeneration::Gen2,
+        Some(&vhdx_path),
+    )?;
 
     println!();
     println!("Windows VM '{}' created successfully!", vm_name);
@@ -173,7 +191,10 @@ fn create_windows_vm(
     println!("  CPUs:   {}", cpu_count);
     println!("  VHDX:   {}", vhdx_path);
     println!();
-    println!("Start with: cargo run --example vm_lifecycle -- start {}", vm_name);
+    println!(
+        "Start with: cargo run --example vm_lifecycle -- start {}",
+        vm_name
+    );
 
     Ok(())
 }
@@ -199,7 +220,13 @@ fn create_linux_vm(
 
     // Create Gen2 VM (Linux works well with Gen2 + Secure Boot disabled)
     println!("  Creating Gen2 VM...");
-    let vm = hyperv.create_vm(vm_name, memory_mb, cpu_count, VmGeneration::Gen2, Some(&vhdx_path))?;
+    let vm = hyperv.create_vm(
+        vm_name,
+        memory_mb,
+        cpu_count,
+        VmGeneration::Gen2,
+        Some(&vhdx_path),
+    )?;
 
     // Disable Secure Boot for Linux (via PowerShell)
     println!("  Disabling Secure Boot for Linux compatibility...");
@@ -219,7 +246,10 @@ fn create_linux_vm(
     println!("  VHDX:   {}", vhdx_path);
     println!("  Secure Boot: Disabled");
     println!();
-    println!("Start with: cargo run --example vm_lifecycle -- start {}", vm_name);
+    println!(
+        "Start with: cargo run --example vm_lifecycle -- start {}",
+        vm_name
+    );
 
     Ok(())
 }
@@ -247,7 +277,13 @@ fn create_windows_clone(
 
     // Create VM
     println!("  Creating Gen2 VM...");
-    let vm = hyperv.create_vm(vm_name, memory_mb, cpu_count, VmGeneration::Gen2, Some(&vhdx_path))?;
+    let vm = hyperv.create_vm(
+        vm_name,
+        memory_mb,
+        cpu_count,
+        VmGeneration::Gen2,
+        Some(&vhdx_path),
+    )?;
 
     println!();
     println!("Windows VM '{}' created with differencing disk!", vm_name);
@@ -255,7 +291,10 @@ fn create_windows_clone(
     println!("  Parent: {}", parent_vhdx);
     println!("  Note:   Changes are stored separately, parent is read-only");
     println!();
-    println!("Start with: cargo run --example vm_lifecycle -- start {}", vm_name);
+    println!(
+        "Start with: cargo run --example vm_lifecycle -- start {}",
+        vm_name
+    );
 
     Ok(())
 }
@@ -281,7 +320,13 @@ fn create_linux_clone(
 
     // Create VM
     println!("  Creating Gen2 VM...");
-    let vm = hyperv.create_vm(vm_name, memory_mb, cpu_count, VmGeneration::Gen2, Some(&vhdx_path))?;
+    let vm = hyperv.create_vm(
+        vm_name,
+        memory_mb,
+        cpu_count,
+        VmGeneration::Gen2,
+        Some(&vhdx_path),
+    )?;
 
     // Disable Secure Boot
     println!("  Disabling Secure Boot...");
@@ -298,7 +343,10 @@ fn create_linux_clone(
     println!("  ID:     {}", vm.id());
     println!("  Parent: {}", parent_vhdx);
     println!();
-    println!("Start with: cargo run --example vm_lifecycle -- start {}", vm_name);
+    println!(
+        "Start with: cargo run --example vm_lifecycle -- start {}",
+        vm_name
+    );
 
     Ok(())
 }
@@ -546,7 +594,10 @@ fn create_batch_vms(
     }
 
     println!();
-    println!("Created {} VMs: {}-01 to {}-{:02}", count, prefix, prefix, count);
+    println!(
+        "Created {} VMs: {}-01 to {}-{:02}",
+        count, prefix, prefix, count
+    );
     println!();
     println!("Note: All VMs use differencing disks based on:");
     println!("  {}", template_path);

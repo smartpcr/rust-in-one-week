@@ -4,7 +4,7 @@ use std::fmt::{Display, Formatter};
 pub enum CompResult {
     Equal,
     Greater,
-    Less
+    Less,
 }
 
 impl From<Ordering> for CompResult {

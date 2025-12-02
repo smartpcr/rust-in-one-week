@@ -29,9 +29,7 @@ async fn main() -> std::io::Result<()> {
 
     match numbers.as_slice() {
         [] => {
-            println!(
-                "No command-line numbers provided; submit values via the /gcd form instead."
-            );
+            println!("No command-line numbers provided; submit values via the /gcd form instead.");
         }
         [single] => {
             println!(

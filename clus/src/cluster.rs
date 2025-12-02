@@ -11,8 +11,7 @@ use windows::core::{Error as WinError, PCWSTR, PWSTR};
 use windows::Win32::Foundation::{ERROR_NO_MORE_ITEMS, WIN32_ERROR};
 use windows::Win32::Networking::Clustering::{
     CloseCluster, ClusterCloseEnum, ClusterEnum, ClusterOpenEnum, GetClusterInformation,
-    OpenCluster, CLUSTER_ENUM_GROUP, CLUSTER_ENUM_NODE, CLUSTER_ENUM_RESOURCE, HCLUSENUM,
-    HCLUSTER,
+    OpenCluster, CLUSTER_ENUM_GROUP, CLUSTER_ENUM_NODE, CLUSTER_ENUM_RESOURCE, HCLUSENUM, HCLUSTER,
 };
 
 /// Represents a connection to a Windows Failover Cluster

@@ -6,15 +6,14 @@ use crate::error::{HvError, Result};
 use std::ffi::OsStr;
 use std::os::windows::ffi::OsStrExt;
 use windows::core::PCWSTR;
-use windows::Win32::Foundation::{CloseHandle, HANDLE, WIN32_ERROR, ERROR_SUCCESS};
+use windows::Win32::Foundation::{CloseHandle, ERROR_SUCCESS, HANDLE, WIN32_ERROR};
 use windows::Win32::Storage::Vhd::{
     AttachVirtualDisk, CompactVirtualDisk, CreateVirtualDisk, DetachVirtualDisk,
     GetVirtualDiskInformation, OpenVirtualDisk, ResizeVirtualDisk, ATTACH_VIRTUAL_DISK_FLAG,
     ATTACH_VIRTUAL_DISK_FLAG_NO_DRIVE_LETTER, ATTACH_VIRTUAL_DISK_FLAG_READ_ONLY,
-    COMPACT_VIRTUAL_DISK_FLAG, CREATE_VIRTUAL_DISK_FLAG_NONE,
-    CREATE_VIRTUAL_DISK_PARAMETERS, CREATE_VIRTUAL_DISK_VERSION_2, DETACH_VIRTUAL_DISK_FLAG,
-    GET_VIRTUAL_DISK_INFO, GET_VIRTUAL_DISK_INFO_SIZE,
-    GET_VIRTUAL_DISK_INFO_VIRTUAL_STORAGE_TYPE,
+    COMPACT_VIRTUAL_DISK_FLAG, CREATE_VIRTUAL_DISK_FLAG_NONE, CREATE_VIRTUAL_DISK_PARAMETERS,
+    CREATE_VIRTUAL_DISK_VERSION_2, DETACH_VIRTUAL_DISK_FLAG, GET_VIRTUAL_DISK_INFO,
+    GET_VIRTUAL_DISK_INFO_SIZE, GET_VIRTUAL_DISK_INFO_VIRTUAL_STORAGE_TYPE,
     OPEN_VIRTUAL_DISK_FLAG_NONE, OPEN_VIRTUAL_DISK_PARAMETERS, OPEN_VIRTUAL_DISK_VERSION_2,
     RESIZE_VIRTUAL_DISK_FLAG, RESIZE_VIRTUAL_DISK_PARAMETERS, RESIZE_VIRTUAL_DISK_VERSION_1,
     VIRTUAL_DISK_ACCESS_ALL, VIRTUAL_DISK_ACCESS_ATTACH_RO, VIRTUAL_DISK_ACCESS_ATTACH_RW,
@@ -56,8 +55,8 @@ impl VhdFormat {
     /// Returns the device ID for the format
     fn device_id(&self) -> u32 {
         match self {
-            VhdFormat::Vhd => 2,   // VIRTUAL_STORAGE_TYPE_DEVICE_VHD
-            VhdFormat::Vhdx => 3,  // VIRTUAL_STORAGE_TYPE_DEVICE_VHDX
+            VhdFormat::Vhd => 2,  // VIRTUAL_STORAGE_TYPE_DEVICE_VHD
+            VhdFormat::Vhdx => 3, // VIRTUAL_STORAGE_TYPE_DEVICE_VHDX
         }
     }
 }
@@ -97,7 +96,10 @@ impl VhdType {
 
 /// Helper to convert Rust string to wide string (UTF-16)
 fn to_wide(s: &str) -> Vec<u16> {
-    OsStr::new(s).encode_wide().chain(std::iter::once(0)).collect()
+    OsStr::new(s)
+        .encode_wide()
+        .chain(std::iter::once(0))
+        .collect()
 }
 
 /// Helper to check WIN32_ERROR and convert to Result
@@ -105,7 +107,10 @@ fn check_win32_error(result: WIN32_ERROR, msg: &str) -> Result<()> {
     if result == ERROR_SUCCESS {
         Ok(())
     } else {
-        Err(HvError::HcsError(format!("{}: error code {}", msg, result.0)))
+        Err(HvError::HcsError(format!(
+            "{}: error code {}",
+            msg, result.0
+        )))
     }
 }
 
@@ -294,7 +299,8 @@ impl Vhd {
         let handle = self.open(VIRTUAL_DISK_ACCESS_ALL)?;
 
         unsafe {
-            let result = CompactVirtualDisk(handle.as_raw(), COMPACT_VIRTUAL_DISK_FLAG(0), None, None);
+            let result =
+                CompactVirtualDisk(handle.as_raw(), COMPACT_VIRTUAL_DISK_FLAG(0), None, None);
             check_win32_error(result, "Failed to compact VHD")?;
         }
 

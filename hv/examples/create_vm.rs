@@ -37,10 +37,7 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
                 println!("This might not be a valid Windows installation ISO.");
             } else {
                 println!("Available Windows editions:\n");
-                println!(
-                    "{:<6} {:<40} {:>12}",
-                    "Index", "Name", "Size"
-                );
+                println!("{:<6} {:<40} {:>12}", "Index", "Name", "Size");
                 println!("{}", "-".repeat(60));
                 for edition in &editions {
                     let size_gb = edition.size_bytes as f64 / (1024.0 * 1024.0 * 1024.0);
@@ -62,18 +59,12 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
             let iso_path = args.get(3).ok_or("Missing ISO path")?;
             let vhdx_path = args.get(4).ok_or("Missing VHDX path")?;
 
-            let size_gb: u64 = args
-                .get(5)
-                .map(|s| s.parse().unwrap_or(64))
-                .unwrap_or(64);
+            let size_gb: u64 = args.get(5).map(|s| s.parse().unwrap_or(64)).unwrap_or(64);
             let memory_mb: u64 = args
                 .get(6)
                 .map(|s| s.parse().unwrap_or(4096))
                 .unwrap_or(4096);
-            let edition_index: u32 = args
-                .get(7)
-                .map(|s| s.parse().unwrap_or(1))
-                .unwrap_or(1);
+            let edition_index: u32 = args.get(7).map(|s| s.parse().unwrap_or(1)).unwrap_or(1);
 
             println!("Creating Windows VM from ISO...\n");
             println!("  VM Name:    {}", vm_name);
@@ -98,7 +89,10 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
             println!("VM created successfully!");
             println!();
             println!("The VM is ready to boot with Windows pre-installed.");
-            println!("Start it with: cargo run --example vm_lifecycle -- start {}", vm_name);
+            println!(
+                "Start it with: cargo run --example vm_lifecycle -- start {}",
+                vm_name
+            );
         }
 
         // =================================================================
@@ -108,10 +102,7 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
             let vm_name = args.get(2).ok_or("Missing VM name")?;
             let iso_path = args.get(3).ok_or("Missing ISO path")?;
 
-            let size_gb: u64 = args
-                .get(4)
-                .map(|s| s.parse().unwrap_or(64))
-                .unwrap_or(64);
+            let size_gb: u64 = args.get(4).map(|s| s.parse().unwrap_or(64)).unwrap_or(64);
             let memory_mb: u64 = args
                 .get(5)
                 .map(|s| s.parse().unwrap_or(4096))
@@ -128,13 +119,8 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
 
             // 2. Create VM with the VHDX
             println!("  Creating Gen2 VM...");
-            let vm = hyperv.create_vm(
-                vm_name,
-                memory_mb,
-                2,
-                VmGeneration::Gen2,
-                Some(&vhdx_path),
-            )?;
+            let vm =
+                hyperv.create_vm(vm_name, memory_mb, 2, VmGeneration::Gen2, Some(&vhdx_path))?;
 
             // 3. Add DVD drive and mount ISO
             println!("  Adding DVD drive...");
@@ -168,10 +154,7 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
                 .get(4)
                 .map(|s| s.parse().unwrap_or(4096))
                 .unwrap_or(4096);
-            let cpu_count: u32 = args
-                .get(5)
-                .map(|s| s.parse().unwrap_or(2))
-                .unwrap_or(2);
+            let cpu_count: u32 = args.get(5).map(|s| s.parse().unwrap_or(2)).unwrap_or(2);
 
             println!("Creating VM from existing VHDX...\n");
 
@@ -197,14 +180,8 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
             let iso_path = args.get(2).ok_or("Missing ISO path")?;
             let vhdx_path = args.get(3).ok_or("Missing VHDX path")?;
 
-            let size_gb: u64 = args
-                .get(4)
-                .map(|s| s.parse().unwrap_or(64))
-                .unwrap_or(64);
-            let edition_index: u32 = args
-                .get(5)
-                .map(|s| s.parse().unwrap_or(1))
-                .unwrap_or(1);
+            let size_gb: u64 = args.get(4).map(|s| s.parse().unwrap_or(64)).unwrap_or(64);
+            let edition_index: u32 = args.get(5).map(|s| s.parse().unwrap_or(1)).unwrap_or(1);
 
             println!("Creating bootable VHDX from ISO...\n");
             println!("  ISO: {}", iso_path);
@@ -231,10 +208,7 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
         "create-data-disk" => {
             let vhdx_path = args.get(2).ok_or("Missing VHDX path")?;
 
-            let size_gb: u64 = args
-                .get(3)
-                .map(|s| s.parse().unwrap_or(100))
-                .unwrap_or(100);
+            let size_gb: u64 = args.get(3).map(|s| s.parse().unwrap_or(100)).unwrap_or(100);
             let label = args.get(4).map(|s| s.as_str()).unwrap_or("Data");
 
             println!("Creating and initializing data disk...\n");
@@ -340,10 +314,7 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
                     let iso = dvd.path.as_deref().unwrap_or("(empty)");
                     println!(
                         "  [{} {}:{}] {}",
-                        dvd.controller_type,
-                        dvd.controller_number,
-                        dvd.controller_location,
-                        iso
+                        dvd.controller_type, dvd.controller_number, dvd.controller_location, iso
                     );
                 }
             }

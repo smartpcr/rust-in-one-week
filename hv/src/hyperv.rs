@@ -360,7 +360,12 @@ impl HyperV {
     /// * `vm_name` - Name of the VM
     /// * `low_mmio_gb` - Low memory mapped IO space in GB (typically 1)
     /// * `high_mmio_gb` - High memory mapped IO space in GB (typically 32 or more)
-    pub fn configure_vm_for_gpu(&self, vm_name: &str, low_mmio_gb: u32, high_mmio_gb: u32) -> Result<()> {
+    pub fn configure_vm_for_gpu(
+        &self,
+        vm_name: &str,
+        low_mmio_gb: u32,
+        high_mmio_gb: u32,
+    ) -> Result<()> {
         gpu::configure_vm_for_gpu(vm_name, low_mmio_gb, high_mmio_gb)
     }
 
@@ -371,7 +376,11 @@ impl HyperV {
     /// # Arguments
     /// * `vhd_path` - Path to the VM's VHD file
     /// * `host_driver_store` - Optional custom driver store path
-    pub fn copy_gpu_drivers_to_vm(&self, vhd_path: &str, host_driver_store: Option<&str>) -> Result<()> {
+    pub fn copy_gpu_drivers_to_vm(
+        &self,
+        vhd_path: &str,
+        host_driver_store: Option<&str>,
+    ) -> Result<()> {
         gpu::copy_gpu_drivers_to_vm(vhd_path, host_driver_store)
     }
 
@@ -439,7 +448,12 @@ impl HyperV {
     /// Move a DDA device from one VM to another
     ///
     /// Both VMs must be stopped.
-    pub fn move_assigned_device(&self, source_vm: &str, target_vm: &str, location_path: &str) -> Result<()> {
+    pub fn move_assigned_device(
+        &self,
+        source_vm: &str,
+        target_vm: &str,
+        location_path: &str,
+    ) -> Result<()> {
         gpu::move_assignable_device(source_vm, target_vm, location_path)
     }
 
@@ -456,7 +470,12 @@ impl HyperV {
     /// * `vm_name` - Name of the VM
     /// * `low_mmio_mb` - Low MMIO space in MB (typically 128-256)
     /// * `high_mmio_gb` - High MMIO space in GB (typically 32+ for GPUs)
-    pub fn set_vm_mmio_space(&self, vm_name: &str, low_mmio_mb: u64, high_mmio_gb: u64) -> Result<()> {
+    pub fn set_vm_mmio_space(
+        &self,
+        vm_name: &str,
+        low_mmio_mb: u64,
+        high_mmio_gb: u64,
+    ) -> Result<()> {
         gpu::set_vm_mmio_space(vm_name, low_mmio_mb, high_mmio_gb)
     }
 

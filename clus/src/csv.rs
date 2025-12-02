@@ -12,11 +12,10 @@ use crate::resource::Resource;
 use crate::utils::{from_wide, to_wide};
 use windows::core::{PCWSTR, PWSTR};
 use windows::Win32::Networking::Clustering::{
-    ClusterResourceControl, ClusterSharedVolumeSetSnapshotState,
+    ClusterGetVolumeNameForVolumeMountPoint, ClusterGetVolumePathName, ClusterIsPathOnSharedVolume,
+    ClusterResourceControl, ClusterSharedVolumeSetSnapshotState, CLCTL_SET_CSV_MAINTENANCE_MODE,
     CLCTL_STORAGE_GET_SHARED_VOLUME_INFO, CLCTL_STORAGE_IS_SHARED_VOLUME,
-    CLCTL_SET_CSV_MAINTENANCE_MODE, CLUSTER_SHARED_VOLUME_SNAPSHOT_STATE,
-    ClusterGetVolumeNameForVolumeMountPoint, ClusterGetVolumePathName,
-    ClusterIsPathOnSharedVolume, CLUS_CSV_MAINTENANCE_MODE_INFO,
+    CLUSTER_SHARED_VOLUME_SNAPSHOT_STATE, CLUS_CSV_MAINTENANCE_MODE_INFO,
 };
 
 /// CSV volume state
@@ -345,18 +344,12 @@ impl Csv {
         let guid_bytes = parse_guid(guid)?;
 
         let win_state = match state {
-            CsvSnapshotState::InitializedAndPersisted => {
-                CLUSTER_SHARED_VOLUME_SNAPSHOT_STATE(1)
-            }
+            CsvSnapshotState::InitializedAndPersisted => CLUSTER_SHARED_VOLUME_SNAPSHOT_STATE(1),
             CsvSnapshotState::Deleted => CLUSTER_SHARED_VOLUME_SNAPSHOT_STATE(2),
         };
 
         let result = unsafe {
-            ClusterSharedVolumeSetSnapshotState(
-                guid_bytes,
-                PCWSTR(wide_volume.as_ptr()),
-                win_state,
-            )
+            ClusterSharedVolumeSetSnapshotState(guid_bytes, PCWSTR(wide_volume.as_ptr()), win_state)
         };
 
         if result != 0 {

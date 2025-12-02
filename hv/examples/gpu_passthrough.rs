@@ -261,10 +261,7 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
             let target_vm = args.get(3).ok_or("Missing target VM name")?;
             let location_path = args.get(4).ok_or("Missing location path")?;
 
-            println!(
-                "Moving device from '{}' to '{}'...",
-                source_vm, target_vm
-            );
+            println!("Moving device from '{}' to '{}'...", source_vm, target_vm);
 
             // Configure target VM for DDA
             println!("  Configuring target VM...");
@@ -335,10 +332,7 @@ fn print_usage(program: &str) {
     eprintln!();
     eprintln!("  # DDA workflow (Windows Server only)");
     eprintln!("  {} dda-check", program);
-    eprintln!(
-        "  {} dda-path \"PCI\\\\VEN_10DE&DEV_2204...\"",
-        program
-    );
+    eprintln!("  {} dda-path \"PCI\\\\VEN_10DE&DEV_2204...\"", program);
     eprintln!(
         "  {} dda-dismount \"PCIROOT(0)#PCI(0100)#PCI(0000)\"",
         program

@@ -11,9 +11,9 @@ use std::process::Command;
 use windows::core::PCWSTR;
 use windows::Win32::Devices::DeviceAndDriverInstallation::{
     SetupDiDestroyDeviceInfoList, SetupDiEnumDeviceInfo, SetupDiGetClassDevsW,
-    SetupDiGetDeviceInstanceIdW, SetupDiGetDeviceRegistryPropertyW, DIGCF_PRESENT,
-    HDEVINFO, SP_DEVINFO_DATA, SPDRP_DEVICEDESC, SPDRP_DRIVER, SPDRP_FRIENDLYNAME,
-    SPDRP_HARDWAREID, SPDRP_LOCATION_INFORMATION, SPDRP_MFG, SETUP_DI_REGISTRY_PROPERTY,
+    SetupDiGetDeviceInstanceIdW, SetupDiGetDeviceRegistryPropertyW, DIGCF_PRESENT, HDEVINFO,
+    SETUP_DI_REGISTRY_PROPERTY, SPDRP_DEVICEDESC, SPDRP_DRIVER, SPDRP_FRIENDLYNAME,
+    SPDRP_HARDWAREID, SPDRP_LOCATION_INFORMATION, SPDRP_MFG, SP_DEVINFO_DATA,
 };
 use windows::Win32::Foundation::ERROR_NO_MORE_ITEMS;
 
@@ -23,7 +23,10 @@ const GUID_DEVCLASS_DISPLAY: windows::core::GUID =
 
 /// Convert Rust string to wide string (UTF-16 null-terminated)
 fn to_wide(s: &str) -> Vec<u16> {
-    OsStr::new(s).encode_wide().chain(std::iter::once(0)).collect()
+    OsStr::new(s)
+        .encode_wide()
+        .chain(std::iter::once(0))
+        .collect()
 }
 
 /// RAII wrapper for HDEVINFO
@@ -147,27 +150,35 @@ pub fn enumerate_gpus() -> Result<Vec<GpuInfo>> {
             }
 
             // Get device instance ID
-            let device_instance_id = get_device_instance_id(device_info_set, &dev_info_data)
-                .unwrap_or_default();
+            let device_instance_id =
+                get_device_instance_id(device_info_set, &dev_info_data).unwrap_or_default();
 
             // Get device properties
             let name = get_device_property(device_info_set, &dev_info_data, SPDRP_FRIENDLYNAME)
                 .or_else(|| get_device_property(device_info_set, &dev_info_data, SPDRP_DEVICEDESC))
                 .unwrap_or_else(|| "Unknown GPU".to_string());
 
-            let description = get_device_property(device_info_set, &dev_info_data, SPDRP_DEVICEDESC)
-                .unwrap_or_default();
+            let description =
+                get_device_property(device_info_set, &dev_info_data, SPDRP_DEVICEDESC)
+                    .unwrap_or_default();
 
-            let manufacturer = get_device_property(device_info_set, &dev_info_data, SPDRP_MFG)
-                .unwrap_or_default();
+            let manufacturer =
+                get_device_property(device_info_set, &dev_info_data, SPDRP_MFG).unwrap_or_default();
 
-            let hardware_ids = get_device_property(device_info_set, &dev_info_data, SPDRP_HARDWAREID)
-                .map(|s| s.split('\0').filter(|s| !s.is_empty()).map(String::from).collect())
-                .unwrap_or_default();
+            let hardware_ids =
+                get_device_property(device_info_set, &dev_info_data, SPDRP_HARDWAREID)
+                    .map(|s| {
+                        s.split('\0')
+                            .filter(|s| !s.is_empty())
+                            .map(String::from)
+                            .collect()
+                    })
+                    .unwrap_or_default();
 
             let driver = get_device_property(device_info_set, &dev_info_data, SPDRP_DRIVER);
 
-            let location = get_device_property(device_info_set, &dev_info_data, SPDRP_LOCATION_INFORMATION);
+            let location =
+                get_device_property(device_info_set, &dev_info_data, SPDRP_LOCATION_INFORMATION);
 
             // Check if GPU supports partitioning
             let supports_partitioning = check_gpu_partitioning_support(&device_instance_id);
@@ -191,7 +202,10 @@ pub fn enumerate_gpus() -> Result<Vec<GpuInfo>> {
 }
 
 /// Get device instance ID
-unsafe fn get_device_instance_id(device_info_set: HDEVINFO, dev_info_data: &SP_DEVINFO_DATA) -> Option<String> {
+unsafe fn get_device_instance_id(
+    device_info_set: HDEVINFO,
+    dev_info_data: &SP_DEVINFO_DATA,
+) -> Option<String> {
     let mut buffer = vec![0u16; 512];
     let mut required_size = 0u32;
 
@@ -231,11 +245,12 @@ unsafe fn get_device_property(
 
     if result.is_ok() && required_size > 0 {
         // Convert UTF-16 to string
-        let wide_slice: &[u16] = std::slice::from_raw_parts(
-            buffer.as_ptr() as *const u16,
-            (required_size as usize) / 2,
-        );
-        let len = wide_slice.iter().position(|&c| c == 0).unwrap_or(wide_slice.len());
+        let wide_slice: &[u16] =
+            std::slice::from_raw_parts(buffer.as_ptr() as *const u16, (required_size as usize) / 2);
+        let len = wide_slice
+            .iter()
+            .position(|&c| c == 0)
+            .unwrap_or(wide_slice.len());
         Some(String::from_utf16_lossy(&wide_slice[..len]))
     } else {
         None
@@ -285,12 +300,17 @@ pub fn get_partitionable_gpus() -> Result<Vec<GpuInfo>> {
             "#,
         ])
         .output()
-        .map_err(|e| HvError::OperationFailed(format!("Failed to query partitionable GPUs: {}", e)))?;
+        .map_err(|e| {
+            HvError::OperationFailed(format!("Failed to query partitionable GPUs: {}", e))
+        })?;
 
     if !output.status.success() {
         // Fallback to enumeration and filter
         let gpus = enumerate_gpus()?;
-        return Ok(gpus.into_iter().filter(|g| g.supports_partitioning).collect());
+        return Ok(gpus
+            .into_iter()
+            .filter(|g| g.supports_partitioning)
+            .collect());
     }
 
     let stdout = String::from_utf8_lossy(&output.stdout);
@@ -326,9 +346,9 @@ pub fn get_partitionable_gpus() -> Result<Vec<GpuInfo>> {
     Ok(gpus
         .into_iter()
         .filter(|g| {
-            partitionable_names.iter().any(|name| {
-                name.contains(&g.device_instance_id) || g.name.contains(name)
-            })
+            partitionable_names
+                .iter()
+                .any(|name| name.contains(&g.device_instance_id) || g.name.contains(name))
         })
         .map(|mut g| {
             g.supports_partitioning = true;
@@ -348,7 +368,9 @@ pub fn add_gpu_partition_adapter(vm_name: &str, instance_path: Option<&str>) -> 
     let output = Command::new("powershell")
         .args(["-NoProfile", "-Command", &cmd])
         .output()
-        .map_err(|e| HvError::OperationFailed(format!("Failed to add GPU partition adapter: {}", e)))?;
+        .map_err(|e| {
+            HvError::OperationFailed(format!("Failed to add GPU partition adapter: {}", e))
+        })?;
 
     if !output.status.success() {
         let stderr = String::from_utf8_lossy(&output.stderr);
@@ -370,7 +392,9 @@ pub fn remove_gpu_partition_adapter(vm_name: &str) -> Result<()> {
             &format!("Remove-VMGpuPartitionAdapter -VMName '{}'", vm_name),
         ])
         .output()
-        .map_err(|e| HvError::OperationFailed(format!("Failed to remove GPU partition adapter: {}", e)))?;
+        .map_err(|e| {
+            HvError::OperationFailed(format!("Failed to remove GPU partition adapter: {}", e))
+        })?;
 
     if !output.status.success() {
         let stderr = String::from_utf8_lossy(&output.stderr);
@@ -414,7 +438,9 @@ pub fn get_gpu_partition_adapters(vm_name: &str) -> Result<Vec<GpuPartitionAdapt
             ),
         ])
         .output()
-        .map_err(|e| HvError::OperationFailed(format!("Failed to get GPU partition adapters: {}", e)))?;
+        .map_err(|e| {
+            HvError::OperationFailed(format!("Failed to get GPU partition adapters: {}", e))
+        })?;
 
     if !output.status.success() {
         let stderr = String::from_utf8_lossy(&output.stderr);
@@ -542,7 +568,9 @@ pub fn set_gpu_partition_adapter(
     let output = Command::new("powershell")
         .args(["-NoProfile", "-Command", &cmd])
         .output()
-        .map_err(|e| HvError::OperationFailed(format!("Failed to set GPU partition adapter: {}", e)))?;
+        .map_err(|e| {
+            HvError::OperationFailed(format!("Failed to set GPU partition adapter: {}", e))
+        })?;
 
     if !output.status.success() {
         let stderr = String::from_utf8_lossy(&output.stderr);
@@ -585,11 +613,9 @@ pub fn configure_vm_for_gpu(vm_name: &str, low_mmio_gb: u32, high_mmio_gb: u32) 
 ///
 /// Note: This copies the driver files from the host to the VM's virtual disk.
 /// The VM must be stopped and the VHD must be accessible.
-pub fn copy_gpu_drivers_to_vm(
-    vm_vhd_path: &str,
-    host_driver_store: Option<&str>,
-) -> Result<()> {
-    let driver_store = host_driver_store.unwrap_or("C:\\Windows\\System32\\DriverStore\\FileRepository");
+pub fn copy_gpu_drivers_to_vm(vm_vhd_path: &str, host_driver_store: Option<&str>) -> Result<()> {
+    let driver_store =
+        host_driver_store.unwrap_or("C:\\Windows\\System32\\DriverStore\\FileRepository");
 
     // This is a simplified implementation - in practice you'd need to:
     // 1. Mount the VHD
@@ -742,7 +768,9 @@ pub fn get_assignable_devices() -> Result<Vec<AssignableDevice>> {
             "#,
         ])
         .output()
-        .map_err(|e| HvError::OperationFailed(format!("Failed to get assignable devices: {}", e)))?;
+        .map_err(|e| {
+            HvError::OperationFailed(format!("Failed to get assignable devices: {}", e))
+        })?;
 
     if !output.status.success() {
         // DDA not available (likely client Windows)
@@ -926,7 +954,9 @@ pub fn remove_assignable_device_from_vm(vm_name: &str, location_path: &str) -> R
             ),
         ])
         .output()
-        .map_err(|e| HvError::OperationFailed(format!("Failed to remove assignable device: {}", e)))?;
+        .map_err(|e| {
+            HvError::OperationFailed(format!("Failed to remove assignable device: {}", e))
+        })?;
 
     if !output.status.success() {
         let stderr = String::from_utf8_lossy(&output.stderr);
@@ -963,7 +993,9 @@ pub fn get_vm_assignable_devices(vm_name: &str) -> Result<Vec<AssignableDevice>>
             ),
         ])
         .output()
-        .map_err(|e| HvError::OperationFailed(format!("Failed to get VM assignable devices: {}", e)))?;
+        .map_err(|e| {
+            HvError::OperationFailed(format!("Failed to get VM assignable devices: {}", e))
+        })?;
 
     if !output.status.success() {
         return Ok(Vec::new());
@@ -1014,10 +1046,7 @@ pub fn get_vm_assignable_devices(vm_name: &str) -> Result<Vec<AssignableDevice>>
 /// Configure VM for DDA device assignment
 ///
 /// Sets automatic stop action and enables write-combining on MMIO.
-pub fn configure_vm_for_dda(
-    vm_name: &str,
-    automatic_stop_action: Option<&str>,
-) -> Result<()> {
+pub fn configure_vm_for_dda(vm_name: &str, automatic_stop_action: Option<&str>) -> Result<()> {
     let stop_action = automatic_stop_action.unwrap_or("TurnOff");
 
     let output = Command::new("powershell")
@@ -1049,11 +1078,7 @@ pub fn configure_vm_for_dda(
 /// Set MMIO (Memory Mapped I/O) space for a VM
 ///
 /// Required for DDA devices that need large MMIO space (like GPUs).
-pub fn set_vm_mmio_space(
-    vm_name: &str,
-    low_mmio_mb: u64,
-    high_mmio_gb: u64,
-) -> Result<()> {
+pub fn set_vm_mmio_space(vm_name: &str, low_mmio_mb: u64, high_mmio_gb: u64) -> Result<()> {
     let output = Command::new("powershell")
         .args([
             "-NoProfile",
@@ -1170,11 +1195,7 @@ pub struct DdaSupportInfo {
 /// 2. Assigns it to the target VM
 ///
 /// Both VMs must be stopped.
-pub fn move_assignable_device(
-    source_vm: &str,
-    target_vm: &str,
-    location_path: &str,
-) -> Result<()> {
+pub fn move_assignable_device(source_vm: &str, target_vm: &str, location_path: &str) -> Result<()> {
     // Remove from source
     remove_assignable_device_from_vm(source_vm, location_path)?;
 

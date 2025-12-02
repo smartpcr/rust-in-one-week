@@ -1,13 +1,13 @@
+use crate::seesaw::person::Person;
+use crate::seesaw::traits::{iif, CompResult, Comparable};
+use rand::Rng;
 use std::cmp::Ordering;
 use std::fmt::{Display, Formatter};
-use rand::Rng;
-use crate::seesaw::person::Person;
-use crate::seesaw::traits::{Comparable, CompResult, iif};
 
 #[derive(Debug, Clone)]
 pub struct Group {
     pub name: String,
-    pub people: Vec<Person>
+    pub people: Vec<Person>,
 }
 
 impl Group {
@@ -15,34 +15,31 @@ impl Group {
         let mut rng = rand::thread_rng();
         let weight: u32 = rng.gen_range(100..200);
         let person_with_different_weight = rng.gen_range(0..size);
-        let different_weight: u32 = iif(
-            weight % 2 == 0,
-            weight + 5,
-            weight - 5);
+        let different_weight: u32 = iif(weight % 2 == 0, weight + 5, weight - 5);
         Group {
             name,
-            people: (0..size).map(|x|
-                Person::new(
-                    x + 1, // person id starts from 1
-                    iif(
-                        x == person_with_different_weight,
-                        different_weight,
-                        weight)))
-                .collect()
+            people: (0..size)
+                .map(|x| {
+                    Person::new(
+                        x + 1, // person id starts from 1
+                        iif(x == person_with_different_weight, different_weight, weight),
+                    )
+                })
+                .collect(),
         }
     }
 
     pub fn default() -> Group {
         Group {
             name: "default".to_string(),
-            people: Vec::new()
+            people: Vec::new(),
         }
     }
 
     pub fn create(slice: &[Person]) -> Group {
         Group {
             name: format!("{}_{}", slice[0].id, slice[slice.len() - 1].id),
-            people: slice.to_vec()
+            people: slice.to_vec(),
         }
     }
 
@@ -61,17 +58,16 @@ impl Group {
 
         let group_size = self.people.len() / 3;
         let left_group = Group::create(&(self.clone().people)[..group_size]);
-        let middle_group = Group::create(&(self.clone().people)[group_size..group_size *2]);
+        let middle_group = Group::create(&(self.clone().people)[group_size..group_size * 2]);
         let right_group: Group;
         if self.people.len() % 3 != 0 {
             let range1 = &(self.clone().people[0..(group_size - self.people.len() % 3)]);
-            let range2 = &(self.clone().people[group_size *2..]);
+            let range2 = &(self.clone().people[group_size * 2..]);
             right_group = Group::create(&[range1, range2].concat());
+        } else {
+            right_group = Group::create(&(self.clone().people)[group_size * 2..]);
         }
-        else {
-            right_group = Group::create(&(self.clone().people)[group_size *2..]);
-        }
-        let right_group = Group::create(&(self.clone().people)[group_size *2..]);
+        let right_group = Group::create(&(self.clone().people)[group_size * 2..]);
         return Ok((left_group, middle_group, right_group));
     }
 }

@@ -6,8 +6,8 @@ use crate::utils::to_wide;
 use windows::core::{Error as WinError, PCWSTR};
 use windows::Win32::Networking::Clustering::{
     CloseClusterNode, ClusterNodeDown, ClusterNodeJoining, ClusterNodePaused, ClusterNodeUp,
-    GetClusterNodeState, OpenClusterNode, PauseClusterNode, ResumeClusterNode,
-    CLUSTER_NODE_STATE, HNODE,
+    GetClusterNodeState, OpenClusterNode, PauseClusterNode, ResumeClusterNode, CLUSTER_NODE_STATE,
+    HNODE,
 };
 
 /// Represents a node in a Windows Failover Cluster

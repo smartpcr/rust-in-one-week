@@ -104,10 +104,7 @@ impl VirtualSwitch {
             .args([
                 "-NoProfile",
                 "-Command",
-                &format!(
-                    "(Get-VMSwitch -Id '{}').SwitchType",
-                    self.switch_id
-                ),
+                &format!("(Get-VMSwitch -Id '{}').SwitchType", self.switch_id),
             ])
             .output()
             .map_err(|e| HvError::OperationFailed(format!("Failed to query switch type: {}", e)))?;
@@ -162,7 +159,9 @@ impl VirtualSwitch {
                 ),
             ])
             .output()
-            .map_err(|e| HvError::OperationFailed(format!("Failed to query network adapter: {}", e)))?;
+            .map_err(|e| {
+                HvError::OperationFailed(format!("Failed to query network adapter: {}", e))
+            })?;
 
         if !output.status.success() {
             return Ok(None);
@@ -184,13 +183,12 @@ impl VirtualSwitch {
             .args([
                 "-NoProfile",
                 "-Command",
-                &format!(
-                    "(Get-VMSwitch -Id '{}').AllowManagementOS",
-                    self.switch_id
-                ),
+                &format!("(Get-VMSwitch -Id '{}').AllowManagementOS", self.switch_id),
             ])
             .output()
-            .map_err(|e| HvError::OperationFailed(format!("Failed to query management OS: {}", e)))?;
+            .map_err(|e| {
+                HvError::OperationFailed(format!("Failed to query management OS: {}", e))
+            })?;
 
         if !output.status.success() {
             return Ok(false);
@@ -213,7 +211,10 @@ impl VirtualSwitch {
 
         if !output.status.success() {
             let stderr = String::from_utf8_lossy(&output.stderr);
-            return Err(HvError::OperationFailed(format!("Failed to delete switch: {}", stderr)));
+            return Err(HvError::OperationFailed(format!(
+                "Failed to delete switch: {}",
+                stderr
+            )));
         }
 
         Ok(())
@@ -259,7 +260,10 @@ pub fn enumerate_switches() -> Result<Vec<VirtualSwitch>> {
 
     if !output.status.success() {
         let stderr = String::from_utf8_lossy(&output.stderr);
-        return Err(HvError::OperationFailed(format!("Failed to enumerate switches: {}", stderr)));
+        return Err(HvError::OperationFailed(format!(
+            "Failed to enumerate switches: {}",
+            stderr
+        )));
     }
 
     let stdout = String::from_utf8_lossy(&output.stdout);
@@ -284,11 +288,14 @@ pub fn enumerate_switches() -> Result<Vec<VirtualSwitch>> {
         .filter_map(|info| {
             let id = info.id?;
             let name = info.name.unwrap_or_else(|| id.clone());
-            let switch_type = info.switch_type.as_ref().map(|s| match s.to_lowercase().as_str() {
-                "external" => SwitchType::External,
-                "internal" => SwitchType::Internal,
-                _ => SwitchType::Private,
-            });
+            let switch_type = info
+                .switch_type
+                .as_ref()
+                .map(|s| match s.to_lowercase().as_str() {
+                    "external" => SwitchType::External,
+                    "internal" => SwitchType::Internal,
+                    _ => SwitchType::Private,
+                });
             Some(VirtualSwitch::from_info(id, name, switch_type))
         })
         .collect())
@@ -322,13 +329,18 @@ pub fn get_switch(name: &str) -> Result<VirtualSwitch> {
     let info: SwitchInfo = serde_json::from_str(trimmed)
         .map_err(|e| HvError::JsonError(format!("Failed to parse switch: {}", e)))?;
 
-    let id = info.id.ok_or_else(|| HvError::SwitchNotFound(name.to_string()))?;
+    let id = info
+        .id
+        .ok_or_else(|| HvError::SwitchNotFound(name.to_string()))?;
     let switch_name = info.name.unwrap_or_else(|| name.to_string());
-    let switch_type = info.switch_type.as_ref().map(|s| match s.to_lowercase().as_str() {
-        "external" => SwitchType::External,
-        "internal" => SwitchType::Internal,
-        _ => SwitchType::Private,
-    });
+    let switch_type = info
+        .switch_type
+        .as_ref()
+        .map(|s| match s.to_lowercase().as_str() {
+            "external" => SwitchType::External,
+            "internal" => SwitchType::Internal,
+            _ => SwitchType::Private,
+        });
 
     Ok(VirtualSwitch::from_info(id, switch_name, switch_type))
 }
@@ -337,7 +349,8 @@ pub fn get_switch(name: &str) -> Result<VirtualSwitch> {
 pub fn create_switch(name: &str, switch_type: SwitchType) -> Result<VirtualSwitch> {
     if switch_type == SwitchType::External {
         return Err(HvError::InvalidParameter(
-            "External switch requires a network adapter name. Use create_external_switch().".to_string(),
+            "External switch requires a network adapter name. Use create_external_switch()."
+                .to_string(),
         ));
     }
 
@@ -356,7 +369,10 @@ pub fn create_switch(name: &str, switch_type: SwitchType) -> Result<VirtualSwitc
 
     if !output.status.success() {
         let stderr = String::from_utf8_lossy(&output.stderr);
-        return Err(HvError::OperationFailed(format!("Failed to create switch: {}", stderr)));
+        return Err(HvError::OperationFailed(format!(
+            "Failed to create switch: {}",
+            stderr
+        )));
     }
 
     get_switch(name)
@@ -368,7 +384,11 @@ pub fn create_external_switch(
     network_adapter_name: &str,
     allow_management_os: bool,
 ) -> Result<VirtualSwitch> {
-    let mgmt_os = if allow_management_os { "$true" } else { "$false" };
+    let mgmt_os = if allow_management_os {
+        "$true"
+    } else {
+        "$false"
+    };
 
     let output = Command::new("powershell")
         .args([
@@ -384,7 +404,10 @@ pub fn create_external_switch(
 
     if !output.status.success() {
         let stderr = String::from_utf8_lossy(&output.stderr);
-        return Err(HvError::OperationFailed(format!("Failed to create external switch: {}", stderr)));
+        return Err(HvError::OperationFailed(format!(
+            "Failed to create external switch: {}",
+            stderr
+        )));
     }
 
     get_switch(name)

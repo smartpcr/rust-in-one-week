@@ -11,7 +11,7 @@ fn main() {
             for step in r.steps {
                 println!("{}", step);
             }
-        },
-        Err(e) => println!("error: {}", e)
+        }
+        Err(e) => println!("error: {}", e),
     }
 }
