@@ -69,12 +69,12 @@ jobs:
   # Windows Server with Failover Cluster for clus module integration tests
   build-windows-cluster:
     name: Build & Test (Windows Server + Failover Cluster)
-    runs-on: self-hosted
+    runs-on: [self-hosted, windows, cluster]
     # Requires a self-hosted runner with:
     # - Windows Server 2019/2022
     # - Failover Clustering feature installed
     # - Runner configured with cluster admin privileges
-    # Label your self-hosted runner with: windows, cluster
+    # Label your self-hosted runner with: self-hosted, windows, cluster
     # To set up: Settings > Actions > Runners > New self-hosted runner
     if: github.event_name == 'push' || github.event.pull_request.head.repo.full_name == github.repository
     steps:

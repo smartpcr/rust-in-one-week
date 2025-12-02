@@ -33,7 +33,7 @@ jobs:
     # 1. Go to repository Settings > Actions > Runners
     # 2. Click "New self-hosted runner"
     # 3. Follow instructions for Windows
-    # 4. Add labels: windows, cluster
+    # 4. Add labels: self-hosted, windows, cluster
     runs-on: [self-hosted, windows, cluster]
 
     # Only run for trusted code (not from forks)
