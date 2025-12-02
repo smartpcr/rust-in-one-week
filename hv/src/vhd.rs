@@ -7,7 +7,7 @@ use std::ffi::OsStr;
 use std::os::windows::ffi::OsStrExt;
 use std::path::Path;
 use windows::core::PCWSTR;
-use windows::Win32::Foundation::{CloseHandle, HANDLE};
+use windows::Win32::Foundation::{CloseHandle, HANDLE, WIN32_ERROR, ERROR_SUCCESS};
 use windows::Win32::Storage::Vhd::{
     AttachVirtualDisk, CompactVirtualDisk, CreateVirtualDisk, DetachVirtualDisk,
     GetVirtualDiskInformation, OpenVirtualDisk, ResizeVirtualDisk, ATTACH_VIRTUAL_DISK_FLAG,
@@ -101,6 +101,15 @@ fn to_wide(s: &str) -> Vec<u16> {
     OsStr::new(s).encode_wide().chain(std::iter::once(0)).collect()
 }
 
+/// Helper to check WIN32_ERROR and convert to Result
+fn check_win32_error(result: WIN32_ERROR, msg: &str) -> Result<()> {
+    if result == ERROR_SUCCESS {
+        Ok(())
+    } else {
+        Err(HvError::HcsError(format!("{}: error code {}", msg, result.0)))
+    }
+}
+
 /// RAII wrapper for VHD handle
 struct VhdHandle(HANDLE);
 
@@ -157,15 +166,15 @@ impl Vhd {
         let mut handle = HANDLE::default();
 
         unsafe {
-            OpenVirtualDisk(
+            let result = OpenVirtualDisk(
                 &storage_type,
                 PCWSTR(path_wide.as_ptr()),
                 access,
                 OPEN_VIRTUAL_DISK_FLAG_NONE,
                 Some(&parameters),
                 &mut handle,
-            )
-            .map_err(|e| HvError::HcsError(format!("Failed to open VHD: {}", e)))?;
+            );
+            check_win32_error(result, "Failed to open VHD")?;
         }
 
         Ok(VhdHandle(handle))
@@ -183,13 +192,13 @@ impl Vhd {
         let mut size_used = 0u32;
 
         unsafe {
-            GetVirtualDiskInformation(
+            let result = GetVirtualDiskInformation(
                 handle.as_raw(),
                 &mut info_size,
                 &mut info,
                 Some(&mut size_used),
-            )
-            .map_err(|e| HvError::HcsError(format!("Failed to get VHD info: {}", e)))?;
+            );
+            check_win32_error(result, "Failed to get VHD info")?;
 
             // The VirtualStorageType contains DeviceId which indicates type
             Ok(VhdType::from(info.Anonymous.VirtualStorageType.DeviceId))
@@ -208,13 +217,13 @@ impl Vhd {
         let mut size_used = 0u32;
 
         unsafe {
-            GetVirtualDiskInformation(
+            let result = GetVirtualDiskInformation(
                 handle.as_raw(),
                 &mut info_size,
                 &mut info,
                 Some(&mut size_used),
-            )
-            .map_err(|e| HvError::HcsError(format!("Failed to get VHD size: {}", e)))?;
+            );
+            check_win32_error(result, "Failed to get VHD size")?;
 
             Ok(info.Anonymous.Size.VirtualSize)
         }
@@ -232,13 +241,13 @@ impl Vhd {
         let mut size_used = 0u32;
 
         unsafe {
-            GetVirtualDiskInformation(
+            let result = GetVirtualDiskInformation(
                 handle.as_raw(),
                 &mut info_size,
                 &mut info,
                 Some(&mut size_used),
-            )
-            .map_err(|e| HvError::HcsError(format!("Failed to get VHD file size: {}", e)))?;
+            );
+            check_win32_error(result, "Failed to get VHD file size")?;
 
             Ok(info.Anonymous.Size.PhysicalSize)
         }
@@ -250,13 +259,12 @@ impl Vhd {
         let handle = self.open(VIRTUAL_DISK_ACCESS_GET_INFO)?;
 
         unsafe {
-            match DetachVirtualDisk(handle.as_raw(), DETACH_VIRTUAL_DISK_FLAG(0), 0) {
-                Ok(_) => {
-                    // Was attached, and now detached - return true but this changes state
-                    // Actually, let's check a different way
-                    Ok(true)
-                }
-                Err(_) => Ok(false),
+            let result = DetachVirtualDisk(handle.as_raw(), DETACH_VIRTUAL_DISK_FLAG(0), 0);
+            if result == ERROR_SUCCESS {
+                // Was attached, and now detached - return true but this changes state
+                Ok(true)
+            } else {
+                Ok(false)
             }
         }
     }
@@ -270,13 +278,13 @@ impl Vhd {
         parameters.Anonymous.Version1.NewSize = new_size_bytes;
 
         unsafe {
-            ResizeVirtualDisk(
+            let result = ResizeVirtualDisk(
                 handle.as_raw(),
                 RESIZE_VIRTUAL_DISK_FLAG(0),
                 &parameters,
                 None,
-            )
-            .map_err(|e| HvError::HcsError(format!("Failed to resize VHD: {}", e)))?;
+            );
+            check_win32_error(result, "Failed to resize VHD")?;
         }
 
         Ok(())
@@ -287,8 +295,8 @@ impl Vhd {
         let handle = self.open(VIRTUAL_DISK_ACCESS_ALL)?;
 
         unsafe {
-            CompactVirtualDisk(handle.as_raw(), COMPACT_VIRTUAL_DISK_FLAG(0), None)
-                .map_err(|e| HvError::HcsError(format!("Failed to compact VHD: {}", e)))?;
+            let result = CompactVirtualDisk(handle.as_raw(), COMPACT_VIRTUAL_DISK_FLAG(0), None);
+            check_win32_error(result, "Failed to compact VHD")?;
         }
 
         Ok(())
@@ -311,8 +319,8 @@ impl Vhd {
         };
 
         unsafe {
-            AttachVirtualDisk(handle.as_raw(), None, flags, 0, None, None)
-                .map_err(|e| HvError::HcsError(format!("Failed to mount VHD: {}", e)))?;
+            let result = AttachVirtualDisk(handle.as_raw(), None, flags, 0, None, None);
+            check_win32_error(result, "Failed to mount VHD")?;
         }
 
         Ok(())
@@ -323,8 +331,8 @@ impl Vhd {
         let handle = self.open(VIRTUAL_DISK_ACCESS_DETACH)?;
 
         unsafe {
-            DetachVirtualDisk(handle.as_raw(), DETACH_VIRTUAL_DISK_FLAG(0), 0)
-                .map_err(|e| HvError::HcsError(format!("Failed to dismount VHD: {}", e)))?;
+            let result = DetachVirtualDisk(handle.as_raw(), DETACH_VIRTUAL_DISK_FLAG(0), 0);
+            check_win32_error(result, "Failed to dismount VHD")?;
         }
 
         Ok(())
@@ -366,7 +374,7 @@ pub fn create_vhd(
     let mut handle = HANDLE::default();
 
     unsafe {
-        CreateVirtualDisk(
+        let result = CreateVirtualDisk(
             &storage_type,
             PCWSTR(path_wide.as_ptr()),
             VIRTUAL_DISK_ACCESS_CREATE,
@@ -376,8 +384,8 @@ pub fn create_vhd(
             &parameters,
             None,
             &mut handle,
-        )
-        .map_err(|e| HvError::HcsError(format!("Failed to create VHD: {}", e)))?;
+        );
+        check_win32_error(result, "Failed to create VHD")?;
 
         let _ = CloseHandle(handle);
     }
@@ -405,7 +413,7 @@ pub fn create_differencing_vhd(path: &str, parent_path: &str) -> Result<Vhd> {
     let mut handle = HANDLE::default();
 
     unsafe {
-        CreateVirtualDisk(
+        let result = CreateVirtualDisk(
             &storage_type,
             PCWSTR(path_wide.as_ptr()),
             VIRTUAL_DISK_ACCESS_CREATE,
@@ -415,8 +423,8 @@ pub fn create_differencing_vhd(path: &str, parent_path: &str) -> Result<Vhd> {
             &parameters,
             None,
             &mut handle,
-        )
-        .map_err(|e| HvError::HcsError(format!("Failed to create differencing VHD: {}", e)))?;
+        );
+        check_win32_error(result, "Failed to create differencing VHD")?;
 
         let _ = CloseHandle(handle);
     }

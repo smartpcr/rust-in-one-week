@@ -123,8 +123,11 @@ pub fn enumerate_gpus() -> Result<Vec<GpuInfo>> {
             PCWSTR::null(),
             None,
             DIGCF_PRESENT,
-        )
-        .map_err(|e| HvError::OperationFailed(format!("Failed to get device info set: {}", e)))?;
+        );
+
+        if device_info_set.is_invalid() {
+            return Err(HvError::OperationFailed("Failed to get device info set".to_string()));
+        }
 
         let _guard = DeviceInfoSet(device_info_set);
 
