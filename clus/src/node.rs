@@ -6,7 +6,7 @@ use crate::utils::to_wide;
 use windows::core::{Error as WinError, PCWSTR};
 use windows::Win32::Networking::Clustering::{
     CloseClusterNode, ClusterNodeDown, ClusterNodeJoining, ClusterNodePaused, ClusterNodeUp,
-    GetClusterNodeState, OpenClusterNodeW, PauseClusterNode, ResumeClusterNode,
+    GetClusterNodeState, OpenClusterNode, PauseClusterNode, ResumeClusterNode,
     CLUSTER_NODE_STATE, HNODE,
 };
 
@@ -43,9 +43,9 @@ impl Node {
     pub fn open(cluster: &Cluster, node_name: &str) -> Result<Self> {
         let wide_name = to_wide(node_name);
 
-        let handle = unsafe { OpenClusterNodeW(cluster.handle(), PCWSTR(wide_name.as_ptr())) };
+        let handle = unsafe { OpenClusterNode(cluster.handle(), PCWSTR(wide_name.as_ptr())) };
 
-        if handle.is_invalid() {
+        if handle.0.is_null() {
             return Err(ClusError::NotFound(node_name.to_string()));
         }
 
@@ -75,7 +75,7 @@ impl Node {
     pub fn pause(&self) -> Result<()> {
         let result = unsafe { PauseClusterNode(self.handle) };
         if result != 0 {
-            return Err(ClusError::WindowsError(WinError::from_win32()));
+            return Err(ClusError::WindowsError(WinError::from_thread()));
         }
         Ok(())
     }
@@ -84,7 +84,7 @@ impl Node {
     pub fn resume(&self) -> Result<()> {
         let result = unsafe { ResumeClusterNode(self.handle) };
         if result != 0 {
-            return Err(ClusError::WindowsError(WinError::from_win32()));
+            return Err(ClusError::WindowsError(WinError::from_thread()));
         }
         Ok(())
     }
@@ -92,7 +92,7 @@ impl Node {
 
 impl Drop for Node {
     fn drop(&mut self) {
-        if !self.handle.is_invalid() {
+        if !self.handle.0.is_null() {
             unsafe {
                 let _ = CloseClusterNode(self.handle);
             }

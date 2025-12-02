@@ -5,12 +5,12 @@ use std::ptr;
 use crate::cluster::Cluster;
 use crate::error::{ClusError, Result};
 use crate::utils::{from_wide, to_wide};
-use windows::core::{Error as WinError, PCWSTR};
+use windows::core::{Error as WinError, PCWSTR, PWSTR};
 use windows::Win32::Networking::Clustering::{
     CloseClusterResource, ClusterResourceFailed, ClusterResourceOffline,
     ClusterResourceOfflinePending, ClusterResourceOnline, ClusterResourceOnlinePending,
     ClusterResourceStateUnknown, GetClusterResourceState, OfflineClusterResource,
-    OnlineClusterResource, OpenClusterResourceW, CLUSTER_RESOURCE_STATE, HRESOURCE,
+    OnlineClusterResource, OpenClusterResource, CLUSTER_RESOURCE_STATE, HRESOURCE,
 };
 
 /// Represents a resource in a Windows Failover Cluster
@@ -49,9 +49,9 @@ impl Resource {
         let wide_name = to_wide(resource_name);
 
         let handle =
-            unsafe { OpenClusterResourceW(cluster.handle(), PCWSTR(wide_name.as_ptr())) };
+            unsafe { OpenClusterResource(cluster.handle(), PCWSTR(wide_name.as_ptr())) };
 
-        if handle.is_invalid() {
+        if handle.0.is_null() {
             return Err(ClusError::NotFound(resource_name.to_string()));
         }
 
@@ -77,7 +77,7 @@ impl Resource {
 
         // Get required size for node name
         let state = unsafe {
-            GetClusterResourceState(self.handle, PCWSTR(ptr::null_mut()), &mut size, None, None)
+            GetClusterResourceState(self.handle, None, Some(&mut size), None, None)
         };
 
         if state == ClusterResourceStateUnknown && size == 0 {
@@ -90,8 +90,8 @@ impl Resource {
         let state = unsafe {
             GetClusterResourceState(
                 self.handle,
-                PCWSTR(buffer.as_mut_ptr()),
-                &mut size,
+                Some(PWSTR(buffer.as_mut_ptr())),
+                Some(&mut size),
                 None,
                 None,
             )
@@ -112,7 +112,7 @@ impl Resource {
         let result = unsafe { OnlineClusterResource(self.handle) };
         // ERROR_IO_PENDING (997) is acceptable - means operation is in progress
         if result != 0 && result != 997 {
-            return Err(ClusError::WindowsError(WinError::from_win32()));
+            return Err(ClusError::WindowsError(WinError::from_thread()));
         }
         Ok(())
     }
@@ -122,7 +122,7 @@ impl Resource {
         let result = unsafe { OfflineClusterResource(self.handle) };
         // ERROR_IO_PENDING (997) is acceptable - means operation is in progress
         if result != 0 && result != 997 {
-            return Err(ClusError::WindowsError(WinError::from_win32()));
+            return Err(ClusError::WindowsError(WinError::from_thread()));
         }
         Ok(())
     }
@@ -130,7 +130,7 @@ impl Resource {
 
 impl Drop for Resource {
     fn drop(&mut self) {
-        if !self.handle.is_invalid() {
+        if !self.handle.0.is_null() {
             unsafe {
                 let _ = CloseClusterResource(self.handle);
             }

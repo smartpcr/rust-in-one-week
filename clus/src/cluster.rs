@@ -7,11 +7,11 @@ use crate::group::Group;
 use crate::node::Node;
 use crate::resource::Resource;
 use crate::utils::{from_wide, to_wide};
-use windows::core::{Error as WinError, PCWSTR};
+use windows::core::{Error as WinError, PCWSTR, PWSTR};
 use windows::Win32::Foundation::{ERROR_NO_MORE_ITEMS, WIN32_ERROR};
 use windows::Win32::Networking::Clustering::{
     CloseCluster, ClusterCloseEnum, ClusterEnum, ClusterOpenEnum, GetClusterInformation,
-    OpenClusterW, CLUSTER_ENUM_GROUP, CLUSTER_ENUM_NODE, CLUSTER_ENUM_RESOURCE, HCLUSENUM,
+    OpenCluster, CLUSTER_ENUM_GROUP, CLUSTER_ENUM_NODE, CLUSTER_ENUM_RESOURCE, HCLUSENUM,
     HCLUSTER,
 };
 
@@ -44,14 +44,14 @@ impl Cluster {
             match cluster_name {
                 Some(name) => {
                     let wide = to_wide(name);
-                    OpenClusterW(PCWSTR(wide.as_ptr()))
+                    OpenCluster(PCWSTR(wide.as_ptr()))
                 }
-                None => OpenClusterW(PCWSTR(ptr::null())),
+                None => OpenCluster(PCWSTR(ptr::null())),
             }
         };
 
-        if handle.is_invalid() {
-            return Err(ClusError::WindowsError(WinError::from_win32()));
+        if handle.0.is_null() {
+            return Err(ClusError::WindowsError(WinError::from_thread()));
         }
 
         Ok(Cluster { handle })
@@ -63,18 +63,18 @@ impl Cluster {
 
         // First call to get required size
         unsafe {
-            let _ = GetClusterInformation(self.handle, PCWSTR(ptr::null_mut()), &mut size, None);
+            let _ = GetClusterInformation(self.handle, PWSTR(ptr::null_mut()), &mut size, None);
         }
 
         size += 1; // Include null terminator
         let mut buffer: Vec<u16> = vec![0; size as usize];
 
         let result = unsafe {
-            GetClusterInformation(self.handle, PCWSTR(buffer.as_mut_ptr()), &mut size, None)
+            GetClusterInformation(self.handle, PWSTR(buffer.as_mut_ptr()), &mut size, None)
         };
 
         if result != 0 {
-            return Err(ClusError::WindowsError(WinError::from_win32()));
+            return Err(ClusError::WindowsError(WinError::from_thread()));
         }
 
         Ok(from_wide(buffer.as_ptr()))
@@ -88,10 +88,10 @@ impl Cluster {
     /// Enumerate all nodes in the cluster.
     pub fn nodes(&self) -> Result<Vec<Node>> {
         let mut nodes = Vec::new();
-        let enum_handle = unsafe { ClusterOpenEnum(self.handle, CLUSTER_ENUM_NODE) };
+        let enum_handle = unsafe { ClusterOpenEnum(self.handle, CLUSTER_ENUM_NODE.0) };
 
-        if enum_handle.is_invalid() {
-            return Err(ClusError::WindowsError(WinError::from_win32()));
+        if enum_handle.0.is_null() {
+            return Err(ClusError::WindowsError(WinError::from_thread()));
         }
 
         let _guard = ClusterEnumGuard(enum_handle);
@@ -107,7 +107,7 @@ impl Cluster {
                     enum_handle,
                     index,
                     &mut obj_type,
-                    PCWSTR(ptr::null_mut()),
+                    PWSTR(ptr::null_mut()),
                     &mut size,
                 )
             };
@@ -124,13 +124,13 @@ impl Cluster {
                     enum_handle,
                     index,
                     &mut obj_type,
-                    PCWSTR(buffer.as_mut_ptr()),
+                    PWSTR(buffer.as_mut_ptr()),
                     &mut size,
                 )
             };
 
             if result != 0 {
-                return Err(ClusError::WindowsError(WinError::from_win32()));
+                return Err(ClusError::WindowsError(WinError::from_thread()));
             }
 
             let node_name = from_wide(buffer.as_ptr());
@@ -152,10 +152,10 @@ impl Cluster {
     /// Enumerate all resources in the cluster.
     pub fn resources(&self) -> Result<Vec<Resource>> {
         let mut resources = Vec::new();
-        let enum_handle = unsafe { ClusterOpenEnum(self.handle, CLUSTER_ENUM_RESOURCE) };
+        let enum_handle = unsafe { ClusterOpenEnum(self.handle, CLUSTER_ENUM_RESOURCE.0) };
 
-        if enum_handle.is_invalid() {
-            return Err(ClusError::WindowsError(WinError::from_win32()));
+        if enum_handle.0.is_null() {
+            return Err(ClusError::WindowsError(WinError::from_thread()));
         }
 
         let _guard = ClusterEnumGuard(enum_handle);
@@ -170,7 +170,7 @@ impl Cluster {
                     enum_handle,
                     index,
                     &mut obj_type,
-                    PCWSTR(ptr::null_mut()),
+                    PWSTR(ptr::null_mut()),
                     &mut size,
                 )
             };
@@ -187,13 +187,13 @@ impl Cluster {
                     enum_handle,
                     index,
                     &mut obj_type,
-                    PCWSTR(buffer.as_mut_ptr()),
+                    PWSTR(buffer.as_mut_ptr()),
                     &mut size,
                 )
             };
 
             if result != 0 {
-                return Err(ClusError::WindowsError(WinError::from_win32()));
+                return Err(ClusError::WindowsError(WinError::from_thread()));
             }
 
             let resource_name = from_wide(buffer.as_ptr());
@@ -215,10 +215,10 @@ impl Cluster {
     /// Enumerate all groups in the cluster.
     pub fn groups(&self) -> Result<Vec<Group>> {
         let mut groups = Vec::new();
-        let enum_handle = unsafe { ClusterOpenEnum(self.handle, CLUSTER_ENUM_GROUP) };
+        let enum_handle = unsafe { ClusterOpenEnum(self.handle, CLUSTER_ENUM_GROUP.0) };
 
-        if enum_handle.is_invalid() {
-            return Err(ClusError::WindowsError(WinError::from_win32()));
+        if enum_handle.0.is_null() {
+            return Err(ClusError::WindowsError(WinError::from_thread()));
         }
 
         let _guard = ClusterEnumGuard(enum_handle);
@@ -233,7 +233,7 @@ impl Cluster {
                     enum_handle,
                     index,
                     &mut obj_type,
-                    PCWSTR(ptr::null_mut()),
+                    PWSTR(ptr::null_mut()),
                     &mut size,
                 )
             };
@@ -250,13 +250,13 @@ impl Cluster {
                     enum_handle,
                     index,
                     &mut obj_type,
-                    PCWSTR(buffer.as_mut_ptr()),
+                    PWSTR(buffer.as_mut_ptr()),
                     &mut size,
                 )
             };
 
             if result != 0 {
-                return Err(ClusError::WindowsError(WinError::from_win32()));
+                return Err(ClusError::WindowsError(WinError::from_thread()));
             }
 
             let group_name = from_wide(buffer.as_ptr());
@@ -278,7 +278,7 @@ impl Cluster {
 
 impl Drop for Cluster {
     fn drop(&mut self) {
-        if !self.handle.is_invalid() {
+        if !self.handle.0.is_null() {
             unsafe {
                 let _ = CloseCluster(self.handle);
             }

@@ -6,13 +6,12 @@
 //! - Maintenance mode management
 //! - Volume information retrieval
 
-use std::ptr;
-
 use crate::cluster::Cluster;
 use crate::error::{ClusError, Result};
 use crate::resource::Resource;
 use crate::utils::{from_wide, to_wide};
-use windows::core::PCWSTR;
+use windows::core::{PCWSTR, PWSTR};
+use windows::Win32::Foundation::BOOL;
 use windows::Win32::Networking::Clustering::{
     ClusterResourceControl, ClusterSharedVolumeSetSnapshotState,
     CLCTL_STORAGE_GET_SHARED_VOLUME_INFO, CLCTL_STORAGE_IS_SHARED_VOLUME,
@@ -124,8 +123,8 @@ impl Csv {
     /// `true` if the path is on a CSV, `false` otherwise
     pub fn is_path_on_csv(path: &str) -> bool {
         let wide_path = to_wide(path);
-        let result = unsafe { ClusterIsPathOnSharedVolume(PCWSTR(wide_path.as_ptr())) };
-        result != 0
+        let result: BOOL = unsafe { ClusterIsPathOnSharedVolume(PCWSTR(wide_path.as_ptr())) };
+        result.as_bool()
     }
 
     /// Get the CSV volume path for a given file path
@@ -145,7 +144,7 @@ impl Csv {
         let result = unsafe {
             ClusterGetVolumePathName(
                 PCWSTR(wide_path.as_ptr()),
-                PCWSTR(buffer.as_mut_ptr()),
+                PWSTR(buffer.as_mut_ptr()),
                 buffer.len() as u32,
             )
         };
@@ -176,7 +175,7 @@ impl Csv {
         let result = unsafe {
             ClusterGetVolumeNameForVolumeMountPoint(
                 PCWSTR(wide_mount.as_ptr()),
-                PCWSTR(buffer.as_mut_ptr()),
+                PWSTR(buffer.as_mut_ptr()),
                 buffer.len() as u32,
             )
         };
