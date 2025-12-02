@@ -50,7 +50,7 @@ impl Cluster {
             }
         };
 
-        if handle.0.is_null() {
+        if handle.0 == 0 {
             return Err(ClusError::WindowsError(WinError::from_thread()));
         }
 
@@ -90,7 +90,7 @@ impl Cluster {
         let mut nodes = Vec::new();
         let enum_handle = unsafe { ClusterOpenEnum(self.handle, CLUSTER_ENUM_NODE.0) };
 
-        if enum_handle.0.is_null() {
+        if enum_handle.0 == 0 {
             return Err(ClusError::WindowsError(WinError::from_thread()));
         }
 
@@ -154,7 +154,7 @@ impl Cluster {
         let mut resources = Vec::new();
         let enum_handle = unsafe { ClusterOpenEnum(self.handle, CLUSTER_ENUM_RESOURCE.0) };
 
-        if enum_handle.0.is_null() {
+        if enum_handle.0 == 0 {
             return Err(ClusError::WindowsError(WinError::from_thread()));
         }
 
@@ -217,7 +217,7 @@ impl Cluster {
         let mut groups = Vec::new();
         let enum_handle = unsafe { ClusterOpenEnum(self.handle, CLUSTER_ENUM_GROUP.0) };
 
-        if enum_handle.0.is_null() {
+        if enum_handle.0 == 0 {
             return Err(ClusError::WindowsError(WinError::from_thread()));
         }
 
@@ -278,7 +278,7 @@ impl Cluster {
 
 impl Drop for Cluster {
     fn drop(&mut self) {
-        if !self.handle.0.is_null() {
+        if !self.handle.0 == 0 {
             unsafe {
                 let _ = CloseCluster(self.handle);
             }

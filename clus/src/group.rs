@@ -51,7 +51,7 @@ impl Group {
 
         let handle = unsafe { OpenClusterGroup(cluster.handle(), PCWSTR(wide_name.as_ptr())) };
 
-        if handle.0.is_null() {
+        if handle.0 == 0 {
             return Err(ClusError::NotFound(group_name.to_string()));
         }
 
@@ -131,7 +131,7 @@ impl Group {
 
 impl Drop for Group {
     fn drop(&mut self) {
-        if !self.handle.0.is_null() {
+        if !self.handle.0 == 0 {
             unsafe {
                 let _ = CloseClusterGroup(self.handle);
             }

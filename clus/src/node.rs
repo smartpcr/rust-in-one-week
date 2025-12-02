@@ -45,7 +45,7 @@ impl Node {
 
         let handle = unsafe { OpenClusterNode(cluster.handle(), PCWSTR(wide_name.as_ptr())) };
 
-        if handle.0.is_null() {
+        if handle.0 == 0 {
             return Err(ClusError::NotFound(node_name.to_string()));
         }
 
@@ -92,7 +92,7 @@ impl Node {
 
 impl Drop for Node {
     fn drop(&mut self) {
-        if !self.handle.0.is_null() {
+        if !self.handle.0 == 0 {
             unsafe {
                 let _ = CloseClusterNode(self.handle);
             }

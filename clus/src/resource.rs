@@ -51,7 +51,7 @@ impl Resource {
         let handle =
             unsafe { OpenClusterResource(cluster.handle(), PCWSTR(wide_name.as_ptr())) };
 
-        if handle.0.is_null() {
+        if handle.0 == 0 {
             return Err(ClusError::NotFound(resource_name.to_string()));
         }
 
@@ -130,7 +130,7 @@ impl Resource {
 
 impl Drop for Resource {
     fn drop(&mut self) {
-        if !self.handle.0.is_null() {
+        if !self.handle.0 == 0 {
             unsafe {
                 let _ = CloseClusterResource(self.handle);
             }
