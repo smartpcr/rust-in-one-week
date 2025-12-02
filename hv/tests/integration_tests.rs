@@ -11,7 +11,7 @@ mod hyperv_tests {
     #[test]
     #[ignore] // Requires Hyper-V
     fn test_connect() {
-        let result = HyperV::connect();
+        let result = HyperV::new();
         assert!(result.is_ok(), "Should be able to connect to Hyper-V");
     }
 
@@ -19,7 +19,7 @@ mod hyperv_tests {
     #[test]
     #[ignore] // Requires Hyper-V
     fn test_host_info() {
-        let hyperv = HyperV::connect().expect("Failed to connect");
+        let hyperv = HyperV::new().expect("Failed to connect");
         let info = hyperv.host_info().expect("Failed to get host info");
 
         assert!(
@@ -43,16 +43,14 @@ mod hyperv_tests {
     #[test]
     #[ignore] // Requires Hyper-V
     fn test_list_vms() {
-        let hyperv = HyperV::connect().expect("Failed to connect");
-        let vms = hyperv.list_vms().expect("Failed to list VMs");
+        let hyperv = HyperV::new().expect("Failed to connect");
+        let mut vms = hyperv.list_vms().expect("Failed to list VMs");
 
         println!("Found {} VMs", vms.len());
-        for vm in &vms {
-            println!(
-                "  - {}: {:?}",
-                vm.name(),
-                vm.state().unwrap_or(VmState::Unknown)
-            );
+        for vm in &mut vms {
+            let name = vm.name().to_string();
+            let state = vm.state().unwrap_or(VmState::Unknown);
+            println!("  - {}: {:?}", name, state);
         }
     }
 
@@ -60,7 +58,7 @@ mod hyperv_tests {
     #[test]
     #[ignore] // Requires Hyper-V
     fn test_list_switches() {
-        let hyperv = HyperV::connect().expect("Failed to connect");
+        let hyperv = HyperV::new().expect("Failed to connect");
         let switches = hyperv.list_switches().expect("Failed to list switches");
 
         println!("Found {} switches", switches.len());
@@ -77,7 +75,7 @@ mod hyperv_tests {
     #[test]
     #[ignore] // Requires Hyper-V
     fn test_get_nonexistent_vm() {
-        let hyperv = HyperV::connect().expect("Failed to connect");
+        let hyperv = HyperV::new().expect("Failed to connect");
         let result = hyperv.get_vm("NonExistentVM12345");
 
         assert!(result.is_err(), "Should fail for non-existent VM");
@@ -91,14 +89,15 @@ mod hyperv_tests {
 
     /// Test VM state enumeration
     #[test]
-    fn test_vm_state_from_u16() {
-        assert_eq!(VmState::from(2), VmState::Running);
-        assert_eq!(VmState::from(3), VmState::Off);
-        assert_eq!(VmState::from(9), VmState::Paused);
-        assert_eq!(VmState::from(6), VmState::Saved);
-        assert_eq!(VmState::from(10), VmState::Starting);
-        assert_eq!(VmState::from(4), VmState::Stopping);
-        assert_eq!(VmState::from(9999), VmState::Unknown);
+    fn test_vm_state_from_hcs_state() {
+        assert_eq!(VmState::from_hcs_state("running"), VmState::Running);
+        assert_eq!(VmState::from_hcs_state("off"), VmState::Off);
+        assert_eq!(VmState::from_hcs_state("stopped"), VmState::Off);
+        assert_eq!(VmState::from_hcs_state("paused"), VmState::Paused);
+        assert_eq!(VmState::from_hcs_state("saved"), VmState::Saved);
+        assert_eq!(VmState::from_hcs_state("starting"), VmState::Starting);
+        assert_eq!(VmState::from_hcs_state("stopping"), VmState::Stopping);
+        assert_eq!(VmState::from_hcs_state("unknown_state"), VmState::Unknown);
     }
 
     /// Test VM state helper methods
@@ -149,12 +148,12 @@ mod hyperv_tests {
     #[test]
     #[ignore] // Requires Hyper-V
     fn test_get_existing_vm() {
-        let hyperv = HyperV::connect().expect("Failed to connect");
+        let hyperv = HyperV::new().expect("Failed to connect");
         let vms = hyperv.list_vms().expect("Failed to list VMs");
 
         if let Some(first_vm) = vms.first() {
             let vm_name = first_vm.name();
-            let vm = hyperv.get_vm(vm_name).expect("Failed to get VM");
+            let mut vm = hyperv.get_vm(vm_name).expect("Failed to get VM");
 
             assert_eq!(vm.name(), vm_name);
             println!("Got VM: {} ({})", vm.name(), vm.id());
@@ -169,15 +168,15 @@ mod hyperv_tests {
     #[test]
     #[ignore] // Requires Hyper-V and admin privileges
     fn test_vm_lifecycle() {
-        let hyperv = HyperV::connect().expect("Failed to connect");
+        let hyperv = HyperV::new().expect("Failed to connect");
         let vm_name = "HvTestVM_IntegrationTest";
 
         // Clean up if exists from previous run
         let _ = hyperv.delete_vm(vm_name);
 
         // Create VM
-        let vm = hyperv
-            .create_vm(vm_name, 512, VmGeneration::Gen2, None)
+        let mut vm = hyperv
+            .create_vm(vm_name, 512, 2, VmGeneration::Gen2, None)
             .expect("Failed to create VM");
 
         assert_eq!(vm.name(), vm_name);
@@ -195,7 +194,7 @@ mod hyperv_tests {
     #[test]
     #[ignore] // Requires Hyper-V and an existing VM
     fn test_snapshot_operations() {
-        let hyperv = HyperV::connect().expect("Failed to connect");
+        let hyperv = HyperV::new().expect("Failed to connect");
         let vms = hyperv.list_vms().expect("Failed to list VMs");
 
         if let Some(vm) = vms.first() {
@@ -236,7 +235,7 @@ mod hyperv_tests {
     #[test]
     #[ignore] // Requires Hyper-V and admin privileges
     fn test_switch_lifecycle() {
-        let hyperv = HyperV::connect().expect("Failed to connect");
+        let hyperv = HyperV::new().expect("Failed to connect");
         let switch_name = "HvTestSwitch_IntegrationTest";
 
         // Clean up if exists from previous run
