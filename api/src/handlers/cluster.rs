@@ -45,7 +45,7 @@ pub async fn cluster_list_nodes(
     let dtos: Vec<NodeDto> = nodes
         .iter()
         .map(|n| {
-            let state = n.state().map(|s| format!("{:?}", s)).unwrap_or_default();
+            let state = format!("{:?}", n.state());
             NodeDto {
                 name: n.name().to_string(),
                 state,
@@ -65,7 +65,7 @@ pub async fn cluster_get_node(
     let node = cluster
         .open_node(&name)
         .map_err(|e| api_error(StatusCode::NOT_FOUND, &e.to_string()))?;
-    let state = node.state().map(|s| format!("{:?}", s)).unwrap_or_default();
+    let state = format!("{:?}", node.state());
     Ok(Json(ApiResponse::success(NodeDto {
         name: node.name().to_string(),
         state,

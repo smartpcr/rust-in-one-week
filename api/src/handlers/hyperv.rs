@@ -55,14 +55,14 @@ pub async fn hyperv_list_vms() -> ApiResult<Vec<VmDto>> {
         .list_vms()
         .map_err(|e| api_error(StatusCode::INTERNAL_SERVER_ERROR, &e.to_string()))?;
     let dtos: Vec<VmDto> = vms
-        .iter()
-        .map(|vm| VmDto {
+        .into_iter()
+        .map(|mut vm| VmDto {
             id: vm.id().to_string(),
             name: vm.name().to_string(),
             state: vm.state().map(|s| format!("{:?}", s)).unwrap_or_default(),
             cpu_count: vm.cpu_count().ok(),
             memory_mb: vm.memory_mb().ok(),
-            uptime_seconds: vm.uptime_seconds().ok(),
+            uptime_seconds: None,
         })
         .collect();
     Ok(Json(ApiResponse::success(dtos)))
@@ -72,7 +72,7 @@ pub async fn hyperv_list_vms() -> ApiResult<Vec<VmDto>> {
 pub async fn hyperv_get_vm(Path(name): Path<String>) -> ApiResult<VmDto> {
     let hv =
         HyperV::new().map_err(|e| api_error(StatusCode::INTERNAL_SERVER_ERROR, &e.to_string()))?;
-    let vm = hv
+    let mut vm = hv
         .get_vm(&name)
         .map_err(|e| api_error(StatusCode::NOT_FOUND, &e.to_string()))?;
     Ok(Json(ApiResponse::success(VmDto {
@@ -81,7 +81,7 @@ pub async fn hyperv_get_vm(Path(name): Path<String>) -> ApiResult<VmDto> {
         state: vm.state().map(|s| format!("{:?}", s)).unwrap_or_default(),
         cpu_count: vm.cpu_count().ok(),
         memory_mb: vm.memory_mb().ok(),
-        uptime_seconds: vm.uptime_seconds().ok(),
+        uptime_seconds: None,
     })))
 }
 
@@ -93,7 +93,7 @@ pub async fn hyperv_create_vm(Json(req): Json<CreateVmRequest>) -> ApiResult<VmD
         1 => VmGeneration::Gen1,
         _ => VmGeneration::Gen2,
     };
-    let vm = hv
+    let mut vm = hv
         .create_vm(
             &req.name,
             req.memory_mb,
@@ -200,7 +200,9 @@ pub async fn hyperv_reset_vm(Path(name): Path<String>) -> ApiResult<&'static str
     let mut vm = hv
         .get_vm(&name)
         .map_err(|e| api_error(StatusCode::NOT_FOUND, &e.to_string()))?;
-    vm.reset()
+    vm.force_stop()
+        .map_err(|e| api_error(StatusCode::INTERNAL_SERVER_ERROR, &e.to_string()))?;
+    vm.start()
         .map_err(|e| api_error(StatusCode::INTERNAL_SERVER_ERROR, &e.to_string()))?;
     Ok(Json(ApiResponse::success("ok")))
 }
@@ -326,8 +328,8 @@ pub async fn hyperv_list_snapshots(Path(name): Path<String>) -> ApiResult<Vec<Sn
             name: s.name().to_string(),
             id: s.id().to_string(),
             vm_name: s.vm_name().to_string(),
-            creation_time: s.creation_time().map(|t| t.to_string()),
-            parent_name: s.parent_name().map(|n| n.to_string()),
+            creation_time: s.creation_time().ok(),
+            parent_name: s.parent_name().ok().flatten(),
         })
         .collect();
     Ok(Json(ApiResponse::success(dtos)))
@@ -346,8 +348,8 @@ pub async fn hyperv_get_snapshot(
         name: s.name().to_string(),
         id: s.id().to_string(),
         vm_name: s.vm_name().to_string(),
-        creation_time: s.creation_time().map(|t| t.to_string()),
-        parent_name: s.parent_name().map(|n| n.to_string()),
+        creation_time: s.creation_time().ok(),
+        parent_name: s.parent_name().ok().flatten(),
     })))
 }
 
@@ -360,7 +362,7 @@ pub async fn hyperv_create_snapshot(
         HyperV::new().map_err(|e| api_error(StatusCode::INTERNAL_SERVER_ERROR, &e.to_string()))?;
     let snapshot_type = match req.snapshot_type.as_deref() {
         Some("Production") => SnapshotType::Production,
-        Some("ProductionOnly") => SnapshotType::ProductionOnly,
+        Some("ProductionOnly") => SnapshotType::Production,
         _ => SnapshotType::Standard,
     };
     let s = hv
@@ -370,8 +372,8 @@ pub async fn hyperv_create_snapshot(
         name: s.name().to_string(),
         id: s.id().to_string(),
         vm_name: s.vm_name().to_string(),
-        creation_time: s.creation_time().map(|t| t.to_string()),
-        parent_name: s.parent_name().map(|n| n.to_string()),
+        creation_time: s.creation_time().ok(),
+        parent_name: s.parent_name().ok().flatten(),
     })))
 }
 
@@ -492,7 +494,7 @@ pub async fn hyperv_get_vhd_info(Query(req): Query<VhdPathRequest>) -> ApiResult
         vhd_type: format!("{:?}", vhd.vhd_type()),
         max_size_bytes: vhd.max_size_bytes().unwrap_or(0),
         file_size_bytes: vhd.file_size_bytes().unwrap_or(0),
-        parent_path: vhd.parent_path(),
+        parent_path: None,
         is_attached: vhd.is_attached().unwrap_or(false),
     })))
 }
@@ -515,7 +517,7 @@ pub async fn hyperv_create_vhd(Json(req): Json<CreateVhdRequest>) -> ApiResult<V
         vhd_type: format!("{:?}", vhd.vhd_type()),
         max_size_bytes: vhd.max_size_bytes().unwrap_or(0),
         file_size_bytes: vhd.file_size_bytes().unwrap_or(0),
-        parent_path: vhd.parent_path(),
+        parent_path: None,
         is_attached: vhd.is_attached().unwrap_or(false),
     })))
 }
@@ -581,7 +583,7 @@ pub async fn hyperv_create_diff_vhd(Json(req): Json<DiffVhdRequest>) -> ApiResul
         vhd_type: format!("{:?}", vhd.vhd_type()),
         max_size_bytes: vhd.max_size_bytes().unwrap_or(0),
         file_size_bytes: vhd.file_size_bytes().unwrap_or(0),
-        parent_path: vhd.parent_path(),
+        parent_path: Some(req.parent_path.clone()),
         is_attached: vhd.is_attached().unwrap_or(false),
     })))
 }
@@ -690,9 +692,9 @@ pub async fn hyperv_vm_gpu_adapters(Path(name): Path<String>) -> ApiResult<Vec<G
         .map(|a| GpuAdapterDto {
             vm_name: a.vm_name,
             instance_path: a.instance_path,
-            min_partition_vram: a.min_partition_vram,
-            max_partition_vram: a.max_partition_vram,
-            optimal_partition_vram: a.optimal_partition_vram,
+            min_partition_vram: a.min_partition_vram.unwrap_or(0),
+            max_partition_vram: a.max_partition_vram.unwrap_or(0),
+            optimal_partition_vram: a.optimal_partition_vram.unwrap_or(0),
         })
         .collect();
     Ok(Json(ApiResponse::success(dtos)))
