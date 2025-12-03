@@ -89,7 +89,11 @@ pub mod windows_service {
         // Initialize logging
         crate::init_tracing(&config.logging.level);
 
-        tracing::info!("Service '{}' starting with config from: {:?}", service_name, config_path);
+        tracing::info!(
+            "Service '{}' starting with config from: {:?}",
+            service_name,
+            config_path
+        );
         tracing::info!(
             "Server will listen on {}:{}",
             config.server.host,

@@ -186,7 +186,10 @@ mod tests {
         assert_eq!(config.logging.level, "api=info,tower_http=info");
         assert_eq!(config.service.name, "nodeagent");
         assert_eq!(config.service.display_name, "Node Agent");
-        assert_eq!(config.service.install_path, r"C:\Program Files\azurestack\nodeagent");
+        assert_eq!(
+            config.service.install_path,
+            r"C:\Program Files\azurestack\nodeagent"
+        );
     }
 
     #[test]
