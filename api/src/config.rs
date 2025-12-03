@@ -15,6 +15,30 @@ pub struct Config {
     /// Logging settings
     #[serde(default)]
     pub logging: LoggingConfig,
+
+    /// Windows service settings
+    #[serde(default)]
+    pub service: ServiceConfig,
+}
+
+/// Windows service configuration
+#[derive(Debug, Deserialize, Clone)]
+pub struct ServiceConfig {
+    /// Service name (default: WinInfraApi)
+    #[serde(default = "default_service_name")]
+    pub name: String,
+
+    /// Service display name (default: Windows Infrastructure API)
+    #[serde(default = "default_display_name")]
+    pub display_name: String,
+
+    /// Service description
+    #[serde(default = "default_description")]
+    pub description: String,
+
+    /// Installation directory (default: C:\Program Files\WinInfraApi)
+    #[serde(default = "default_install_path")]
+    pub install_path: String,
 }
 
 /// Server-specific configuration
@@ -42,11 +66,27 @@ fn default_host() -> String {
 }
 
 fn default_port() -> u16 {
-    3000
+    6001
 }
 
 fn default_log_level() -> String {
     "api=info,tower_http=info".to_string()
+}
+
+fn default_service_name() -> String {
+    "nodeagent".to_string()
+}
+
+fn default_display_name() -> String {
+    "Node Agent".to_string()
+}
+
+fn default_description() -> String {
+    "REST API for Windows Failover Cluster and Hyper-V management".to_string()
+}
+
+fn default_install_path() -> String {
+    r"C:\Program Files\azurestack\nodeagent".to_string()
 }
 
 impl Default for ServerConfig {
@@ -66,11 +106,23 @@ impl Default for LoggingConfig {
     }
 }
 
+impl Default for ServiceConfig {
+    fn default() -> Self {
+        Self {
+            name: default_service_name(),
+            display_name: default_display_name(),
+            description: default_description(),
+            install_path: default_install_path(),
+        }
+    }
+}
+
 impl Default for Config {
     fn default() -> Self {
         Self {
             server: ServerConfig::default(),
             logging: LoggingConfig::default(),
+            service: ServiceConfig::default(),
         }
     }
 }
@@ -130,14 +182,17 @@ mod tests {
     fn test_default_config() {
         let config = Config::default();
         assert_eq!(config.server.host, "0.0.0.0");
-        assert_eq!(config.server.port, 3000);
+        assert_eq!(config.server.port, 6001);
         assert_eq!(config.logging.level, "api=info,tower_http=info");
+        assert_eq!(config.service.name, "nodeagent");
+        assert_eq!(config.service.display_name, "Node Agent");
+        assert_eq!(config.service.install_path, r"C:\Program Files\azurestack\nodeagent");
     }
 
     #[test]
     fn test_socket_addr() {
         let config = Config::default();
-        assert_eq!(config.socket_addr(), "0.0.0.0:3000");
+        assert_eq!(config.socket_addr(), "0.0.0.0:6001");
     }
 
     #[test]
@@ -160,10 +215,19 @@ mod tests {
 
             [logging]
             level = "debug"
+
+            [service]
+            name = "MyApi"
+            display_name = "My Custom API"
+            description = "Custom API service"
+            install_path = "D:\\Services\\MyApi"
         "#;
         let config: Config = toml::from_str(toml).unwrap();
         assert_eq!(config.server.host, "127.0.0.1");
         assert_eq!(config.server.port, 8080);
         assert_eq!(config.logging.level, "debug");
+        assert_eq!(config.service.name, "MyApi");
+        assert_eq!(config.service.display_name, "My Custom API");
+        assert_eq!(config.service.install_path, r"D:\Services\MyApi");
     }
 }

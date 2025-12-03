@@ -1,6 +1,9 @@
 //! Windows Service support for the API server
 //!
 //! This module provides Windows Service functionality using the windows-service crate.
+//!
+//! Note: The service name used for registration must match the name used during installation.
+//! The PowerShell script reads the service name from config.toml during installation.
 
 #[cfg(windows)]
 pub mod windows_service {
@@ -20,12 +23,22 @@ pub mod windows_service {
 
     use crate::config::Config;
 
-    const SERVICE_NAME: &str = "WinInfraApi";
     const SERVICE_TYPE: ServiceType = ServiceType::OWN_PROCESS;
 
     /// Run the application as a Windows service
-    pub fn run_as_service() -> Result<(), windows_service::Error> {
-        service_dispatcher::start(SERVICE_NAME, ffi_service_main)
+    ///
+    /// The service_name parameter must match the name used when the service was installed.
+    pub fn run_as_service(service_name: &str) -> Result<(), windows_service::Error> {
+        // Store the service name in a thread-local for the service main function
+        SERVICE_NAME.with(|name| {
+            *name.borrow_mut() = service_name.to_string();
+        });
+        service_dispatcher::start(service_name, ffi_service_main)
+    }
+
+    // Thread-local storage for the service name
+    std::thread_local! {
+        static SERVICE_NAME: std::cell::RefCell<String> = std::cell::RefCell::new(String::new());
     }
 
     define_windows_service!(ffi_service_main, service_main);
@@ -37,6 +50,9 @@ pub mod windows_service {
     }
 
     fn run_service() -> Result<(), Box<dyn std::error::Error>> {
+        // Get the service name from thread-local storage
+        let service_name = SERVICE_NAME.with(|name| name.borrow().clone());
+
         // Create a channel to receive stop events
         let (shutdown_tx, shutdown_rx) = mpsc::channel();
 
@@ -53,7 +69,7 @@ pub mod windows_service {
         };
 
         // Register the service control handler
-        let status_handle = service_control_handler::register(SERVICE_NAME, event_handler)?;
+        let status_handle = service_control_handler::register(&service_name, event_handler)?;
 
         // Report running status
         status_handle.set_service_status(ServiceStatus {
@@ -73,7 +89,7 @@ pub mod windows_service {
         // Initialize logging
         crate::init_tracing(&config.logging.level);
 
-        tracing::info!("Service starting with config from: {:?}", config_path);
+        tracing::info!("Service '{}' starting with config from: {:?}", service_name, config_path);
         tracing::info!(
             "Server will listen on {}:{}",
             config.server.host,
@@ -131,7 +147,7 @@ pub mod windows_service {
     /// When running as a service, looks for config.toml in:
     /// 1. Same directory as the executable
     /// 2. Falls back to current directory
-    fn get_config_path() -> std::path::PathBuf {
+    pub fn get_config_path() -> std::path::PathBuf {
         if let Ok(exe_path) = std::env::current_exe() {
             if let Some(exe_dir) = exe_path.parent() {
                 let config_path = exe_dir.join("config.toml");
@@ -147,10 +163,15 @@ pub mod windows_service {
 #[cfg(not(windows))]
 pub mod windows_service {
     /// Placeholder for non-Windows platforms
-    pub fn run_as_service() -> Result<(), std::io::Error> {
+    pub fn run_as_service(_service_name: &str) -> Result<(), std::io::Error> {
         Err(std::io::Error::new(
             std::io::ErrorKind::Unsupported,
             "Windows service is only supported on Windows",
         ))
+    }
+
+    /// Get the configuration file path
+    pub fn get_config_path() -> std::path::PathBuf {
+        std::path::PathBuf::from("config.toml")
     }
 }

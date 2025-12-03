@@ -4,18 +4,37 @@
 //! - Failover Cluster: nodes, groups, resources, CSV
 //! - Hyper-V: VMs, VHDs, snapshots, switches, GPU (GPU-P and DDA)
 
+pub mod config;
 pub mod dto;
 pub mod handlers;
 pub mod response;
 pub mod routes;
+pub mod service;
 
 use std::sync::Arc;
 
 use axum::{routing::get, Json, Router};
 use tower_http::{cors::CorsLayer, trace::TraceLayer};
+use tracing_subscriber::{layer::SubscriberExt, util::SubscriberInitExt};
 
+pub use config::Config;
 pub use dto::*;
 pub use response::{ApiResponse, ApiResult};
+
+// =============================================================================
+// Tracing Initialization
+// =============================================================================
+
+/// Initialize tracing/logging with the given filter level
+pub fn init_tracing(filter: &str) {
+    tracing_subscriber::registry()
+        .with(
+            tracing_subscriber::EnvFilter::try_from_default_env()
+                .unwrap_or_else(|_| filter.into()),
+        )
+        .with(tracing_subscriber::fmt::layer())
+        .init();
+}
 
 // =============================================================================
 // Shared State

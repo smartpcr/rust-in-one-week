@@ -1,4 +1,4 @@
-# Windows Infrastructure API Configuration
+# Node Agent Configuration
 #
 # Copy this file to config.toml and modify as needed.
 # The API will look for config.toml in:
@@ -12,7 +12,7 @@
 host = "0.0.0.0"
 
 # Port to listen on
-port = 3000
+port = 6001
 
 [logging]
 # Log level filter
@@ -22,3 +22,17 @@ port = 3000
 #   "debug"                       - Debug logging for all modules
 #   "trace"                       - Verbose trace logging
 level = "api=info,tower_http=info"
+
+[service]
+# Windows service name (used for service registration)
+name = "nodeagent"
+
+# Display name shown in Windows Services console
+display_name = "Node Agent"
+
+# Service description
+description = "REST API for Windows Failover Cluster and Hyper-V management"
+
+# Installation directory for the service
+# The PowerShell install script will copy files here
+install_path = "C:\\Program Files\\azurestack\\nodeagent"
