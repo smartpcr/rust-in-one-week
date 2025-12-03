@@ -1,16 +1,18 @@
 # rust-in-one-week
 
-| Module              | Description                                                                 |
-|---------------------|-----------------------------------------------------------------------------|
-| api                 | Placeholder API project                                                     |
-| basics              | Core Rust fundamentals (integer overflow, floating-point, vectors, structs) |
-| clus                | Windows Failover Cluster API bindings (list clusters, move VMs)             |
-| cmd                 | Actix-web server with form handling and module visibility                   |
-| hello-rust          | Intro project with ferris-says, chrono, GCD implementation                  |
-| hv                  | Windows Hyper-V management (VMs, VHDs, GPU-P, DDA, snapshots)               |
-| mandelbrot          | Parallel fractal renderer with crossbeam                                    |
-| OTel                | OpenTelemetry tracing example with stdout exporter                          |
-| quick-replace       | CLI regex text replacement tool                                             |
-| seesaw              | Divide-and-conquer weight puzzle solver                                     |
-| use-mod             | Module organization patterns and local path dependencies                    |
-| web-with-prometheus | Nickel server with Prometheus metrics                                       |
+A Rust learning repository organized as a Cargo workspace with independent example projects.
+
+| Module              | Description                                                                      |
+|---------------------|----------------------------------------------------------------------------------|
+| api                 | REST API for Windows cluster/Hyper-V management with Axum and service support    |
+| basics              | Integer overflow/underflow and vector operations demonstrating Rust fundamentals |
+| clus                | Windows Failover Cluster API bindings for cluster and VM management              |
+| cmd                 | Axum web server with module visibility examples and GCD calculator               |
+| hello-rust          | Ferris-says message printing and chrono date calculations                        |
+| hv                  | Hyper-V VM, switch, VHD, snapshot, and GPU management via HCS APIs               |
+| mandelbrot          | Parallel Mandelbrot set image renderer using crossbeam                           |
+| OTel                | OpenTelemetry distributed tracing with parent/child spans                        |
+| quick-replace       | CLI regex-based text replacement tool with colored output                        |
+| seesaw              | Seesaw puzzle solver using divide-and-conquer trait design                       |
+| use-mod             | Module patterns with nested modules and local path dependencies                  |
+| web-with-prometheus | Nickel web server with HTTP request Prometheus metrics                           |
