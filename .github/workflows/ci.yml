@@ -76,7 +76,7 @@ jobs:
   # Windows Server with Failover Cluster and Hyper-V for integration tests
   build-windows-server:
     name: Build & Test (Windows Server + Hyper-V + Cluster)
-    runs-on: [windows-2025]
+    runs-on: [hub-win-2025]
     # Requires a self-hosted runner with:
     # - Windows Server 2019/2022/2025
     # - Hyper-V role installed

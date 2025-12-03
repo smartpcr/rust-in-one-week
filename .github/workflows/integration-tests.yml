@@ -33,7 +33,7 @@ jobs:
     #    Install-WindowsFeature -Name Failover-Clustering -IncludeManagementTools
     # 4. Node must be part of a failover cluster or have access to one
     # 5. Runner service account must have admin privileges
-    runs-on: [windows-2025]
+    runs-on: [hub-win-2025]
 
     # Only run for trusted code (not from forks)
     if: github.event_name == 'push' || github.event_name == 'workflow_dispatch' || github.event.pull_request.head.repo.full_name == github.repository
