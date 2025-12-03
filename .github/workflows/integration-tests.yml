@@ -42,6 +42,14 @@ jobs:
       - name: Checkout repository
         uses: actions/checkout@v4
 
+      - name: Ensure PowerShell Core is installed
+        shell: cmd
+        run: |
+          pwsh --version || (
+            echo Installing PowerShell Core...
+            winget install --id Microsoft.PowerShell --source winget --accept-package-agreements --accept-source-agreements
+          )
+
       - name: Install Rust toolchain
         shell: pwsh
         run: |
@@ -67,14 +75,6 @@ jobs:
 
       - name: Setup MSVC Developer Environment
         uses: ilammy/msvc-dev-cmd@v1
-
-      - name: Ensure PowerShell Core is installed
-        shell: cmd
-        run: |
-          pwsh --version || (
-            echo Installing PowerShell Core...
-            winget install --id Microsoft.PowerShell --source winget --accept-package-agreements --accept-source-agreements
-          )
 
       - name: System Information
         shell: pwsh
