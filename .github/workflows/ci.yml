@@ -85,16 +85,38 @@ jobs:
     # - Runner configured with admin privileges
     if: github.event_name == 'push' || github.event.pull_request.head.repo.full_name == github.repository
     steps:
+      - name: Debug Runner Info
+        shell: cmd
+        run: |
+          echo "Runner Name: %RUNNER_NAME%"
+          echo "Computer Name: %COMPUTERNAME%"
+          hostname
+          echo "Checking for pwsh..."
+          where pwsh || echo "pwsh not found in PATH"
+          echo "Checking for powershell..."
+          where powershell
+          echo "PATH: %PATH%"
+
       - name: Checkout repository
         uses: actions/checkout@v4
 
       - name: Ensure PowerShell Core is installed
-        shell: cmd
+        shell: powershell
         run: |
-          pwsh --version || (
-            echo Installing PowerShell Core...
-            winget install --id Microsoft.PowerShell --source winget --accept-package-agreements --accept-source-agreements
-          )
+          if (!(Get-Command pwsh -ErrorAction SilentlyContinue)) {
+            Write-Host "Installing PowerShell Core..."
+            $url = "https://github.com/PowerShell/PowerShell/releases/download/v7.4.6/PowerShell-7.4.6-win-x64.msi"
+            $msiPath = "$env:TEMP\PowerShell.msi"
+            Invoke-WebRequest -Uri $url -OutFile $msiPath
+            Start-Process msiexec.exe -ArgumentList "/i", $msiPath, "/quiet", "/norestart", "ADD_EXPLORER_CONTEXT_MENU_OPENPOWERSHELL=1", "ADD_FILE_CONTEXT_MENU_RUNPOWERSHELL=1", "ENABLE_PSREMOTING=1", "REGISTER_MANIFEST=1", "USE_MU=1", "ENABLE_MU=1", "ADD_PATH=1" -Wait
+            Remove-Item $msiPath
+            # Refresh PATH
+            $env:Path = [System.Environment]::GetEnvironmentVariable("Path", "Machine") + ";" + [System.Environment]::GetEnvironmentVariable("Path", "User")
+            Write-Host "PowerShell Core installed successfully"
+          } else {
+            Write-Host "PowerShell Core already installed"
+            pwsh --version
+          }
 
       - name: Install Rust toolchain
         shell: pwsh
