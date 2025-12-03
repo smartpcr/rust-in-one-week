@@ -1,0 +1,24 @@
+# Windows Infrastructure API Configuration
+#
+# Copy this file to config.toml and modify as needed.
+# The API will look for config.toml in:
+#   - Same directory as the executable (for Windows service)
+#   - Current working directory (for console mode)
+
+[server]
+# Host address to bind to
+# Use "0.0.0.0" to listen on all interfaces
+# Use "127.0.0.1" to only accept local connections
+host = "0.0.0.0"
+
+# Port to listen on
+port = 3000
+
+[logging]
+# Log level filter
+# Examples:
+#   "api=debug,tower_http=debug" - Debug logging for API and HTTP layer
+#   "api=info,tower_http=info"   - Info level (recommended for production)
+#   "debug"                       - Debug logging for all modules
+#   "trace"                       - Verbose trace logging
+level = "api=info,tower_http=info"
