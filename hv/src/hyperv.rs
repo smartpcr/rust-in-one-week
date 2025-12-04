@@ -34,10 +34,7 @@ impl HyperV {
     pub fn list_vms(&self) -> Result<Vec<Vm>> {
         let wmi_vms = wmi_ops::list_vms(&self.conn)?;
 
-        Ok(wmi_vms
-            .into_iter()
-            .map(|vm| Vm::from_wmi(&vm))
-            .collect())
+        Ok(wmi_vms.into_iter().map(|vm| Vm::from_wmi(&vm)).collect())
     }
 
     /// Gets a VM by name

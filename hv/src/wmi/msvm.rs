@@ -126,7 +126,9 @@ impl MsvmSnapshot {
         Ok(MsvmSnapshot {
             name: obj.get_string_required("ElementName")?,
             id: obj.get_string_required("InstanceID")?,
-            vm_id: obj.get_string("VirtualSystemIdentifier")?.unwrap_or_default(),
+            vm_id: obj
+                .get_string("VirtualSystemIdentifier")?
+                .unwrap_or_default(),
             creation_time: obj.get_string("CreationTime")?,
             notes: obj.get_string("Notes")?,
             path: obj.path()?,

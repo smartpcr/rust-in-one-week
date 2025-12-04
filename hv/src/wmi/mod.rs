@@ -118,10 +118,8 @@ impl WmiConnection {
         ensure_com_initialized()?;
 
         unsafe {
-            let locator: IWbemLocator =
-                CoCreateInstance(&WbemLocator, None, CLSCTX_INPROC_SERVER).map_err(|e| {
-                    HvError::WmiError(format!("Failed to create WMI locator: {:?}", e))
-                })?;
+            let locator: IWbemLocator = CoCreateInstance(&WbemLocator, None, CLSCTX_INPROC_SERVER)
+                .map_err(|e| HvError::WmiError(format!("Failed to create WMI locator: {:?}", e)))?;
 
             let services = locator
                 .ConnectServer(
@@ -252,7 +250,12 @@ impl WmiConnection {
             let mut input: Option<IWbemClassObject> = None;
             class
                 .inner
-                .GetMethod(&BSTR::from(method_name), 0, &mut input, std::ptr::null_mut())
+                .GetMethod(
+                    &BSTR::from(method_name),
+                    0,
+                    &mut input,
+                    std::ptr::null_mut(),
+                )
                 .map_err(|e| {
                     HvError::WmiError(format!(
                         "Failed to get method {} parameters: {:?}",
@@ -266,14 +269,14 @@ impl WmiConnection {
                     obj.SpawnInstance(0)
                         .map(|inst| WmiObject { inner: inst })
                         .map_err(|e| {
-                            HvError::WmiError(format!("Failed to spawn parameter instance: {:?}", e))
+                            HvError::WmiError(format!(
+                                "Failed to spawn parameter instance: {:?}",
+                                e
+                            ))
                         })
                 })
                 .ok_or_else(|| {
-                    HvError::WmiError(format!(
-                        "No input parameters for method {}",
-                        method_name
-                    ))
+                    HvError::WmiError(format!("No input parameters for method {}", method_name))
                 })?
         }
     }
@@ -297,9 +300,7 @@ impl Iterator for WmiQueryResult {
             let mut row = [None; 1];
             let mut returned = 0;
 
-            let hr = self
-                .enumerator
-                .Next(WBEM_INFINITE, &mut row, &mut returned);
+            let hr = self.enumerator.Next(WBEM_INFINITE, &mut row, &mut returned);
 
             // S_FALSE indicates no more items
             if hr == S_FALSE || returned == 0 {
@@ -347,10 +348,7 @@ impl WmiObject {
                     None,
                 )
                 .map_err(|e| {
-                    HvError::WmiError(format!(
-                        "Failed to get property {}: {:?}",
-                        property, e
-                    ))
+                    HvError::WmiError(format!("Failed to get property {}: {:?}", property, e))
                 })?;
 
             // Check for null/empty
@@ -402,10 +400,7 @@ impl WmiObject {
                     None,
                 )
                 .map_err(|e| {
-                    HvError::WmiError(format!(
-                        "Failed to get property {}: {:?}",
-                        property, e
-                    ))
+                    HvError::WmiError(format!("Failed to get property {}: {:?}", property, e))
                 })?;
 
             if value.is_empty() {
@@ -444,10 +439,7 @@ impl WmiObject {
                     None,
                 )
                 .map_err(|e| {
-                    HvError::WmiError(format!(
-                        "Failed to get property {}: {:?}",
-                        property, e
-                    ))
+                    HvError::WmiError(format!("Failed to get property {}: {:?}", property, e))
                 })?;
 
             if value.is_empty() {
@@ -486,10 +478,7 @@ impl WmiObject {
                     None,
                 )
                 .map_err(|e| {
-                    HvError::WmiError(format!(
-                        "Failed to get property {}: {:?}",
-                        property, e
-                    ))
+                    HvError::WmiError(format!("Failed to get property {}: {:?}", property, e))
                 })?;
 
             if value.is_empty() {
@@ -518,10 +507,7 @@ impl WmiObject {
                     None,
                 )
                 .map_err(|e| {
-                    HvError::WmiError(format!(
-                        "Failed to get property {}: {:?}",
-                        property, e
-                    ))
+                    HvError::WmiError(format!("Failed to get property {}: {:?}", property, e))
                 })?;
 
             if value.is_empty() {
@@ -542,10 +528,7 @@ impl WmiObject {
             self.inner
                 .Put(PCWSTR::from_raw(prop_wide.as_ptr()), 0, &variant, 0)
                 .map_err(|e| {
-                    HvError::WmiError(format!(
-                        "Failed to set property {}: {:?}",
-                        property, e
-                    ))
+                    HvError::WmiError(format!("Failed to set property {}: {:?}", property, e))
                 })?;
             Ok(())
         }
@@ -559,10 +542,7 @@ impl WmiObject {
             self.inner
                 .Put(PCWSTR::from_raw(prop_wide.as_ptr()), 0, &variant, 0)
                 .map_err(|e| {
-                    HvError::WmiError(format!(
-                        "Failed to set property {}: {:?}",
-                        property, e
-                    ))
+                    HvError::WmiError(format!("Failed to set property {}: {:?}", property, e))
                 })?;
             Ok(())
         }
@@ -576,10 +556,7 @@ impl WmiObject {
             self.inner
                 .Put(PCWSTR::from_raw(prop_wide.as_ptr()), 0, &variant, 0)
                 .map_err(|e| {
-                    HvError::WmiError(format!(
-                        "Failed to set property {}: {:?}",
-                        property, e
-                    ))
+                    HvError::WmiError(format!("Failed to set property {}: {:?}", property, e))
                 })?;
             Ok(())
         }
@@ -609,9 +586,7 @@ impl WmiObject {
             };
             let sa = SafeArrayCreate(VT_BSTR, 1, &bounds);
             if sa.is_null() {
-                return Err(HvError::WmiError(
-                    "Failed to create SAFEARRAY".to_string(),
-                ));
+                return Err(HvError::WmiError("Failed to create SAFEARRAY".to_string()));
             }
 
             // Put each string into the array
@@ -656,10 +631,7 @@ impl WmiObject {
             self.inner
                 .Put(PCWSTR::from_raw(prop_wide.as_ptr()), 0, &variant, 0)
                 .map_err(|e| {
-                    HvError::WmiError(format!(
-                        "Failed to set property {}: {:?}",
-                        property, e
-                    ))
+                    HvError::WmiError(format!("Failed to set property {}: {:?}", property, e))
                 })?;
             Ok(())
         }
@@ -712,8 +684,8 @@ pub mod hyperv {
     pub enum EnabledState {
         Unknown = 0,
         Other = 1,
-        Enabled = 2,        // Running
-        Disabled = 3,       // Off
+        Enabled = 2,  // Running
+        Disabled = 3, // Off
         ShuttingDown = 4,
         NotApplicable = 5,
         EnabledButOffline = 6,
@@ -722,7 +694,7 @@ pub mod hyperv {
         Quiesce = 9,
         Starting = 10,
         Paused = 32768,
-        Suspended = 32769,  // Saved
+        Suspended = 32769, // Saved
         Starting2 = 32770,
         Saving = 32773,
         Stopping = 32774,
@@ -759,9 +731,9 @@ pub mod hyperv {
     /// Requested state for VM state change
     #[derive(Debug, Clone, Copy)]
     pub enum RequestedState {
-        Enabled = 2,       // Start VM
-        Disabled = 3,      // Stop VM (hard)
-        Shutdown = 4,      // Graceful shutdown
+        Enabled = 2,  // Start VM
+        Disabled = 3, // Stop VM (hard)
+        Shutdown = 4, // Graceful shutdown
         Offline = 6,
         Test = 7,
         Defer = 8,
@@ -782,8 +754,7 @@ pub mod hyperv {
 
     /// Get the Msvm_VirtualEthernetSwitchManagementService singleton
     pub fn get_vesms(conn: &WmiConnection) -> Result<WmiObject> {
-        let mut result =
-            conn.query("SELECT * FROM Msvm_VirtualEthernetSwitchManagementService")?;
+        let mut result = conn.query("SELECT * FROM Msvm_VirtualEthernetSwitchManagementService")?;
         result
             .next()
             .ok_or_else(|| HvError::WmiError("VESMS not found".to_string()))?

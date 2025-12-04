@@ -100,10 +100,7 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
                     if let Some(part_path) = assoc.get_string("PartComponent")? {
                         let default_obj = conn.get_object(&part_path)?;
                         println!("Default found!");
-                        println!(
-                            "  ResourceType: {:?}",
-                            default_obj.get_u32("ResourceType")?
-                        );
+                        println!("  ResourceType: {:?}", default_obj.get_u32("ResourceType")?);
                         println!(
                             "  ResourceSubType: {:?}",
                             default_obj.get_string("ResourceSubType")?
@@ -143,10 +140,7 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
                     if let Some(part_path) = assoc.get_string("PartComponent")? {
                         let default_obj = conn.get_object(&part_path)?;
                         println!("Default found!");
-                        println!(
-                            "  ResourceType: {:?}",
-                            default_obj.get_u32("ResourceType")?
-                        );
+                        println!("  ResourceType: {:?}", default_obj.get_u32("ResourceType")?);
                         println!(
                             "  ResourceSubType: {:?}",
                             default_obj.get_string("ResourceSubType")?

@@ -148,16 +148,16 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
                 .ok_or("Missing memory size")?
                 .parse()
                 .map_err(|_| "Invalid memory size")?;
-            let vhd_size_gb: u64 = args
-                .get(4)
-                .map(|s| s.parse().unwrap_or(64))
-                .unwrap_or(64);
+            let vhd_size_gb: u64 = args.get(4).map(|s| s.parse().unwrap_or(64)).unwrap_or(64);
 
             // Default VHD path
             let vhd_path = format!("C:\\Hyper-V\\Virtual Hard Disks\\{}.vhdx", vm_name);
             let vhd_size_bytes = vhd_size_gb * 1024 * 1024 * 1024;
 
-            println!("Creating VM '{}' with {} MB memory, {}GB disk...", vm_name, memory_mb, vhd_size_gb);
+            println!(
+                "Creating VM '{}' with {} MB memory, {}GB disk...",
+                vm_name, memory_mb, vhd_size_gb
+            );
             let vm = hyperv.create_vm(
                 vm_name,
                 memory_mb,

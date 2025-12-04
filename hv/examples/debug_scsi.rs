@@ -25,7 +25,8 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
 
             // Debug: list all resource pools
             println!("\nListing all resource pools:");
-            let all_pools = conn.query("SELECT * FROM Msvm_ResourcePool WHERE Primordial = TRUE")?;
+            let all_pools =
+                conn.query("SELECT * FROM Msvm_ResourcePool WHERE Primordial = TRUE")?;
             for pool in all_pools {
                 let pool = pool?;
                 if let Some(subtype) = pool.get_string("ResourceSubType")? {
@@ -90,10 +91,22 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
                 match conn.get_object(&part_path) {
                     Ok(default_obj) => {
                         println!("  SUCCESS! Default object retrieved:");
-                        println!("    ResourceType: {:?}", default_obj.get_u32("ResourceType")?);
-                        println!("    ResourceSubType: {:?}", default_obj.get_string("ResourceSubType")?);
-                        println!("    InstanceID: {:?}", default_obj.get_string("InstanceID")?);
-                        println!("    ElementName: {:?}", default_obj.get_string("ElementName")?);
+                        println!(
+                            "    ResourceType: {:?}",
+                            default_obj.get_u32("ResourceType")?
+                        );
+                        println!(
+                            "    ResourceSubType: {:?}",
+                            default_obj.get_string("ResourceSubType")?
+                        );
+                        println!(
+                            "    InstanceID: {:?}",
+                            default_obj.get_string("InstanceID")?
+                        );
+                        println!(
+                            "    ElementName: {:?}",
+                            default_obj.get_string("ElementName")?
+                        );
                     }
                     Err(e) => {
                         println!("  ERROR getting default object: {:?}", e);

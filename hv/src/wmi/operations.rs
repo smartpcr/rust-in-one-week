@@ -407,9 +407,7 @@ fn create_vm_internal(
         }
     }
 
-    Err(HvError::OperationFailed(
-        "Failed to create VM".to_string(),
-    ))
+    Err(HvError::OperationFailed("Failed to create VM".to_string()))
 }
 
 /// Delete a VM
@@ -418,8 +416,7 @@ pub fn delete_vm(conn: &WmiConnection, vm_name: &str) -> Result<()> {
     let vsms = hyperv::get_vsms(conn)?;
     let vsms_path = vsms.path()?;
 
-    let params =
-        conn.get_method_params("Msvm_VirtualSystemManagementService", "DestroySystem")?;
+    let params = conn.get_method_params("Msvm_VirtualSystemManagementService", "DestroySystem")?;
     params.put_string("AffectedSystem", &vm.path)?;
 
     let result = conn.exec_method(&vsms_path, "DestroySystem", Some(&params))?;
@@ -589,8 +586,8 @@ pub fn add_vhd_to_vm(conn: &WmiConnection, vm_id: &str, vhd_path: &str) -> Resul
 
         let vhd_text = get_instance_text(conn, &vhd_obj)?;
 
-        let params = conn
-            .get_method_params("Msvm_VirtualSystemManagementService", "AddResourceSettings")?;
+        let params =
+            conn.get_method_params("Msvm_VirtualSystemManagementService", "AddResourceSettings")?;
         params.put_string("AffectedConfiguration", &settings.path)?;
         params.put_string_array("ResourceSettings", &[&vhd_text])?;
 
@@ -626,9 +623,8 @@ fn add_scsi_controller(conn: &WmiConnection, settings_path: &str) -> Result<Stri
     let result = conn.exec_method(&vsms_path, "AddResourceSettings", Some(&params))?;
 
     if let Some(result_obj) = result {
-        hyperv::check_job_result(conn, &result_obj).map_err(|e| {
-            HvError::OperationFailed(format!("SCSI controller job failed: {}", e))
-        })?;
+        hyperv::check_job_result(conn, &result_obj)
+            .map_err(|e| HvError::OperationFailed(format!("SCSI controller job failed: {}", e)))?;
     }
 
     // Query for the newly added SCSI controller
@@ -900,8 +896,8 @@ pub fn connect_vm_to_switch(conn: &WmiConnection, vm_name: &str, switch_name: &s
 
         let conn_text = get_instance_text(conn, &conn_obj)?;
 
-        let params = conn
-            .get_method_params("Msvm_VirtualSystemManagementService", "AddResourceSettings")?;
+        let params =
+            conn.get_method_params("Msvm_VirtualSystemManagementService", "AddResourceSettings")?;
         params.put_string("AffectedConfiguration", &settings.path)?;
         params.put_string_array("ResourceSettings", &[&conn_text])?;
 
@@ -955,10 +951,7 @@ pub fn create_snapshot(
 
     let settings_text = get_instance_text(conn, &settings)?;
 
-    let params = conn.get_method_params(
-        "Msvm_VirtualSystemManagementService",
-        "CreateSnapshot",
-    )?;
+    let params = conn.get_method_params("Msvm_VirtualSystemManagementService", "CreateSnapshot")?;
     params.put_string("AffectedSystem", &vm.path)?;
     params.put_string("SnapshotSettings", &settings_text)?;
     params.put_u32("SnapshotType", 2)?; // Full snapshot
@@ -988,8 +981,7 @@ pub fn apply_snapshot(conn: &WmiConnection, vm_name: &str, snapshot_name: &str) 
     let vsms = hyperv::get_vsms(conn)?;
     let vsms_path = vsms.path()?;
 
-    let params =
-        conn.get_method_params("Msvm_VirtualSystemManagementService", "ApplySnapshot")?;
+    let params = conn.get_method_params("Msvm_VirtualSystemManagementService", "ApplySnapshot")?;
     params.put_string("Snapshot", &snapshot.path)?;
 
     let result = conn.exec_method(&vsms_path, "ApplySnapshot", Some(&params))?;
@@ -1098,9 +1090,9 @@ fn get_default_resource(conn: &WmiConnection, subtype: ResourceSubtype) -> Resul
     );
     let mut caps_results = conn.query(&caps_query)?;
 
-    let caps = caps_results.next().ok_or_else(|| {
-        HvError::WmiError("Allocation capabilities not found".to_string())
-    })??;
+    let caps = caps_results
+        .next()
+        .ok_or_else(|| HvError::WmiError("Allocation capabilities not found".to_string()))??;
     let caps_path = caps.path()?;
 
     // Get the SettingsDefineCapabilities associations to find the default settings

@@ -34,10 +34,8 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
         if let Some(vm) = vms.next() {
             let vm = vm?;
             let vm_path = vm.path()?;
-            let params = conn.get_method_params(
-                "Msvm_VirtualSystemManagementService",
-                "DestroySystem",
-            )?;
+            let params =
+                conn.get_method_params("Msvm_VirtualSystemManagementService", "DestroySystem")?;
             params.put_string("AffectedSystem", &vm_path)?;
             conn.exec_method(&vsms_path, "DestroySystem", Some(&params))?;
             std::thread::sleep(std::time::Duration::from_secs(1));
@@ -83,7 +81,9 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
             return Ok(());
         }
 
-        result_obj.get_string("ResultingSystem")?.unwrap_or_default()
+        result_obj
+            .get_string("ResultingSystem")?
+            .unwrap_or_default()
     } else {
         println!("ERROR: No result from DefineSystem");
         return Ok(());
@@ -141,7 +141,10 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
     let scsi = scsi_default.ok_or("Default SCSI not found")?;
     println!("Got default SCSI controller");
     println!("  ResourceType: {:?}", scsi.get_u32("ResourceType")?);
-    println!("  ResourceSubType: {:?}", scsi.get_string("ResourceSubType")?);
+    println!(
+        "  ResourceSubType: {:?}",
+        scsi.get_string("ResourceSubType")?
+    );
 
     // Step 3: Serialize to XML
     println!("\nStep 3: Serializing SCSI controller to XML...");
@@ -162,10 +165,10 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
     params.put_string("AffectedConfiguration", &vm_settings_path)?;
 
     // Create SAFEARRAY for ResourceSettings
+    use windows::core::BSTR;
     use windows::Win32::System::Com::SAFEARRAYBOUND;
     use windows::Win32::System::Ole::{SafeArrayCreate, SafeArrayPutElement};
     use windows::Win32::System::Variant::{VT_ARRAY, VT_BSTR};
-    use windows::core::BSTR;
 
     unsafe {
         let bounds = SAFEARRAYBOUND {
@@ -178,8 +181,8 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
         SafeArrayPutElement(sa, &index, bstr.into_raw() as *const _)?;
 
         // Set on params
-        use windows::Win32::System::Variant::VARIANT;
         use windows::core::PCWSTR;
+        use windows::Win32::System::Variant::VARIANT;
 
         let prop_name: Vec<u16> = "ResourceSettings\0".encode_utf16().collect();
         let mut variant = VARIANT::default();
@@ -205,7 +208,10 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
             let job = conn.get_object(&job_path)?;
             println!("JobState: {:?}", job.get_u32("JobState")?);
             println!("ErrorCode: {:?}", job.get_u32("ErrorCode")?);
-            println!("ErrorDescription: {:?}", job.get_string("ErrorDescription")?);
+            println!(
+                "ErrorDescription: {:?}",
+                job.get_string("ErrorDescription")?
+            );
         } else if return_value == 0 {
             println!("SUCCESS! SCSI controller added.");
             let resulting = result_obj.get_string("ResultingResourceSettings")?;
@@ -217,8 +223,7 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
 
     // Cleanup: Delete test VM
     println!("\nCleaning up test VM...");
-    let params =
-        conn.get_method_params("Msvm_VirtualSystemManagementService", "DestroySystem")?;
+    let params = conn.get_method_params("Msvm_VirtualSystemManagementService", "DestroySystem")?;
     params.put_string("AffectedSystem", &vm_path)?;
     conn.exec_method(&vsms_path, "DestroySystem", Some(&params))?;
     println!("Test VM deleted.");
