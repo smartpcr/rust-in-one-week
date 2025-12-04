@@ -349,7 +349,10 @@ pub fn create_snapshot(
     };
 
     let cmd = if type_arg.is_empty() {
-        format!("Checkpoint-VM -Name '{}' -SnapshotName '{}'", vm_name, snapshot_name)
+        format!(
+            "Checkpoint-VM -Name '{}' -SnapshotName '{}'",
+            vm_name, snapshot_name
+        )
     } else {
         format!(
             "Checkpoint-VM -Name '{}' -SnapshotName '{}' {}",
