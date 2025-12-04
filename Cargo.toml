@@ -7,6 +7,7 @@ members = [
     "cmd",
     "hello-rust",
     "hv",
+    "hyperv",
     "mandelbrot",
     "OTel",
     "quick-replace",

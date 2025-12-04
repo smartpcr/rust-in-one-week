@@ -1,0 +1,68 @@
+[package]
+name = "windows-hyperv"
+version = "0.1.0"
+edition = "2021"
+rust-version = "1.82"
+license = "MIT OR Apache-2.0"
+description = "Typed Hyper-V management API for Windows"
+
+[dependencies]
+windows-core = "0.61"
+windows-result = "0.3"
+windows = { version = "0.61", features = [
+    "Win32_Foundation",
+    "Win32_System_Wmi",
+    "Win32_System_Com",
+    "Win32_System_Variant",
+    "Win32_System_Ole",
+    "Win32_System_Rpc",
+    "Win32_Security",
+] }
+
+[features]
+default = ["std"]
+std = []
+
+[[example]]
+name = "list_vms"
+path = "examples/list_vms.rs"
+
+[[example]]
+name = "create_vm"
+path = "examples/create_vm.rs"
+
+[[example]]
+name = "delete_vm"
+path = "examples/delete_vm.rs"
+
+[[example]]
+name = "vm_power"
+path = "examples/vm_power.rs"
+
+[[example]]
+name = "create_vhd"
+path = "examples/create_vhd.rs"
+
+[[example]]
+name = "attach_disk"
+path = "examples/attach_disk.rs"
+
+[[example]]
+name = "mount_iso"
+path = "examples/mount_iso.rs"
+
+[[example]]
+name = "list_switches"
+path = "examples/list_switches.rs"
+
+[[example]]
+name = "add_network"
+path = "examples/add_network.rs"
+
+[[example]]
+name = "checkpoints"
+path = "examples/checkpoints.rs"
+
+[[example]]
+name = "full_vm_setup"
+path = "examples/full_vm_setup.rs"

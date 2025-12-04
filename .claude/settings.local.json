@@ -21,7 +21,9 @@
       "Bash(cargo fmt:*)",
       "Bash(cargo tree:*)",
       "Bash(rustup target add:*)",
-      "Bash(find:*)"
+      "Bash(find:*)",
+      "Bash(cp:*)",
+      "Bash(rustup target:*)"
     ],
     "deny": [],
     "ask": []
