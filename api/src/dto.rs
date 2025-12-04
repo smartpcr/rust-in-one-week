@@ -69,7 +69,12 @@ pub struct CreateVmRequest {
     pub memory_mb: u64,
     pub cpu_count: Option<u32>,
     pub generation: Option<u32>,
-    pub vhd_path: Option<String>,
+    /// Path where the new VHD will be created
+    pub vhd_path: String,
+    /// Size of the VHD in bytes
+    pub vhd_size_bytes: u64,
+    /// Optional virtual switch to connect to
+    pub switch_name: Option<String>,
 }
 
 #[derive(Debug, Serialize, Deserialize)]

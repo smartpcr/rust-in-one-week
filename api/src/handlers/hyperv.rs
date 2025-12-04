@@ -99,7 +99,9 @@ pub async fn hyperv_create_vm(Json(req): Json<CreateVmRequest>) -> ApiResult<VmD
             req.memory_mb,
             req.cpu_count.unwrap_or(2),
             generation,
-            req.vhd_path.as_deref(),
+            &req.vhd_path,
+            req.vhd_size_bytes,
+            req.switch_name.as_deref(),
         )
         .map_err(|e| api_error(StatusCode::INTERNAL_SERVER_ERROR, &e.to_string()))?;
     Ok(Json(ApiResponse::success(VmDto {
