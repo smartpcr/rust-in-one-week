@@ -32,4 +32,8 @@ windows = { version = "0.62.2", features = [
 [dependencies]
 thiserror = "2.0.17"
 
+[features]
+default = []
+integration = []  # Enable integration tests that require Failover Cluster
+
 [dev-dependencies]

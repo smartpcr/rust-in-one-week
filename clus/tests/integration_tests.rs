@@ -1,15 +1,17 @@
 //! Integration tests for the clus library
 //!
 //! These tests require a Windows Failover Cluster to be available.
-//! Run with: cargo test --package clus -- --ignored
+//!
+//! Test organization:
+//! - Unit tests: Run with `cargo test` (always enabled)
+//! - Integration tests: Run with `cargo test --features integration` (requires cluster)
 
-#[cfg(windows)]
+#[cfg(all(windows, feature = "integration"))]
 mod cluster_tests {
     use clus::{ClusError, Cluster, GroupState, NodeState, ResourceState};
 
     /// Test opening a connection to the local cluster
     #[test]
-    #[ignore] // Requires cluster environment
     fn test_open_local_cluster() {
         let result = Cluster::open(None);
         assert!(result.is_ok(), "Should be able to open local cluster");
@@ -22,7 +24,6 @@ mod cluster_tests {
 
     /// Test opening a connection to a named cluster
     #[test]
-    #[ignore] // Requires cluster environment
     fn test_open_named_cluster() {
         // This will fail if the cluster doesn't exist, which is expected
         let result = Cluster::open(Some("NonExistentCluster"));
@@ -31,7 +32,6 @@ mod cluster_tests {
 
     /// Test enumerating all nodes in the cluster
     #[test]
-    #[ignore] // Requires cluster environment
     fn test_enumerate_nodes() {
         let cluster = Cluster::open(None).expect("Failed to open cluster");
         let nodes = cluster.nodes().expect("Failed to enumerate nodes");
@@ -56,7 +56,6 @@ mod cluster_tests {
 
     /// Test enumerating all resources in the cluster
     #[test]
-    #[ignore] // Requires cluster environment
     fn test_enumerate_resources() {
         let cluster = Cluster::open(None).expect("Failed to open cluster");
         let resources = cluster.resources().expect("Failed to enumerate resources");
@@ -85,7 +84,6 @@ mod cluster_tests {
 
     /// Test enumerating all groups in the cluster
     #[test]
-    #[ignore] // Requires cluster environment
     fn test_enumerate_groups() {
         let cluster = Cluster::open(None).expect("Failed to open cluster");
         let groups = cluster.groups().expect("Failed to enumerate groups");
@@ -111,7 +109,6 @@ mod cluster_tests {
 
     /// Test opening a specific node by name
     #[test]
-    #[ignore] // Requires cluster environment
     fn test_open_node_by_name() {
         let cluster = Cluster::open(None).expect("Failed to open cluster");
         let nodes = cluster.nodes().expect("Failed to enumerate nodes");
@@ -133,7 +130,6 @@ mod cluster_tests {
 
     /// Test opening a non-existent node
     #[test]
-    #[ignore] // Requires cluster environment
     fn test_open_nonexistent_node() {
         let cluster = Cluster::open(None).expect("Failed to open cluster");
         let result = cluster.open_node("NonExistentNode12345");
@@ -149,7 +145,6 @@ mod cluster_tests {
 
     /// Test opening a specific resource by name
     #[test]
-    #[ignore] // Requires cluster environment
     fn test_open_resource_by_name() {
         let cluster = Cluster::open(None).expect("Failed to open cluster");
         let resources = cluster.resources().expect("Failed to enumerate resources");
@@ -173,7 +168,6 @@ mod cluster_tests {
 
     /// Test opening a specific group by name
     #[test]
-    #[ignore] // Requires cluster environment
     fn test_open_group_by_name() {
         let cluster = Cluster::open(None).expect("Failed to open cluster");
         let groups = cluster.groups().expect("Failed to enumerate groups");
@@ -198,7 +192,6 @@ mod cluster_tests {
     /// Test node pause and resume operations
     /// WARNING: This test will actually pause a node! Use with caution.
     #[test]
-    #[ignore] // Requires cluster environment and admin privileges
     fn test_node_pause_resume() {
         let cluster = Cluster::open(None).expect("Failed to open cluster");
         let nodes = cluster.nodes().expect("Failed to enumerate nodes");
@@ -232,7 +225,6 @@ mod cluster_tests {
     /// Test resource online/offline operations
     /// WARNING: This test will actually take a resource offline! Use with caution.
     #[test]
-    #[ignore] // Requires cluster environment and admin privileges
     fn test_resource_online_offline() {
         let cluster = Cluster::open(None).expect("Failed to open cluster");
         let resources = cluster.resources().expect("Failed to enumerate resources");
@@ -275,7 +267,6 @@ mod cluster_tests {
     /// Test group move operation
     /// WARNING: This test will actually move a group! Use with caution.
     #[test]
-    #[ignore] // Requires cluster environment and admin privileges
     fn test_group_move() {
         let cluster = Cluster::open(None).expect("Failed to open cluster");
         let groups = cluster.groups().expect("Failed to enumerate groups");

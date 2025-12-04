@@ -166,15 +166,11 @@ jobs:
         run: cargo test --workspace --verbose
 
       - name: Run hv integration tests (Hyper-V required)
-        run: cargo test -p hv --verbose -- --ignored
+        run: cargo test -p hv --features integration --verbose
         continue-on-error: true
 
       - name: Run clus integration tests (cluster required)
-        run: cargo test -p clus --verbose -- --ignored
-        continue-on-error: true
-
-      - name: Run api integration tests
-        run: cargo test -p api --verbose -- --ignored
+        run: cargo test -p clus --features integration --verbose
         continue-on-error: true
 
   # Lint and format check

@@ -1,4 +1,6 @@
 //! Integration tests for the API
+//!
+//! These tests use an in-memory router and don't require Hyper-V or cluster.
 
 use axum::{
     body::Body,

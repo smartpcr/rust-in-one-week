@@ -20,7 +20,8 @@
       "WebFetch(domain:crates.io)",
       "Bash(cargo fmt:*)",
       "Bash(cargo tree:*)",
-      "Bash(rustup target add:*)"
+      "Bash(rustup target add:*)",
+      "Bash(find:*)"
     ],
     "deny": [],
     "ask": []

@@ -64,4 +64,8 @@ uuid = { version = "1.0", features = ["v4"] }
 [dependencies]
 thiserror = "2.0"
 
+[features]
+default = []
+integration = []  # Enable integration tests that require Hyper-V
+
 [dev-dependencies]

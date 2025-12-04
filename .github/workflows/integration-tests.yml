@@ -128,19 +128,13 @@ jobs:
         run: cargo test --workspace --verbose
 
       - name: Run hv integration tests (Hyper-V required)
-        run: cargo test -p hv --verbose -- --ignored --test-threads=1
+        run: cargo test -p hv --features integration --verbose -- --test-threads=1
         continue-on-error: true
         env:
           RUST_BACKTRACE: 1
 
       - name: Run clus integration tests (cluster required)
-        run: cargo test -p clus --verbose -- --ignored --test-threads=1
-        continue-on-error: true
-        env:
-          RUST_BACKTRACE: 1
-
-      - name: Run api integration tests
-        run: cargo test -p api --verbose -- --ignored --test-threads=1
+        run: cargo test -p clus --features integration --verbose -- --test-threads=1
         continue-on-error: true
         env:
           RUST_BACKTRACE: 1
