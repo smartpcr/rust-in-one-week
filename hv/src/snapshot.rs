@@ -339,21 +339,26 @@ pub fn create_snapshot(
     snapshot_name: &str,
     snapshot_type: SnapshotType,
 ) -> Result<Snapshot> {
+    // Note: The Checkpoint-VM cmdlet uses -CheckpointType (not -SnapshotType)
+    // Available types: Standard, Production, ProductionOnly
+    // For Standard checkpoints, we can omit the type parameter for compatibility
     let type_arg = match snapshot_type {
-        SnapshotType::Standard => "-SnapshotType Standard",
-        SnapshotType::Production => "-SnapshotType Production",
-        SnapshotType::ProductionFallback => "-SnapshotType ProductionOnly",
+        SnapshotType::Standard => "", // Default is Standard, omit for compatibility
+        SnapshotType::Production => "-CheckpointType Production",
+        SnapshotType::ProductionFallback => "-CheckpointType ProductionOnly",
+    };
+
+    let cmd = if type_arg.is_empty() {
+        format!("Checkpoint-VM -Name '{}' -SnapshotName '{}'", vm_name, snapshot_name)
+    } else {
+        format!(
+            "Checkpoint-VM -Name '{}' -SnapshotName '{}' {}",
+            vm_name, snapshot_name, type_arg
+        )
     };
 
     let output = Command::new("powershell")
-        .args([
-            "-NoProfile",
-            "-Command",
-            &format!(
-                "Checkpoint-VM -Name '{}' -SnapshotName '{}' {}",
-                vm_name, snapshot_name, type_arg
-            ),
-        ])
+        .args(["-NoProfile", "-Command", &cmd])
         .output()
         .map_err(|e| HvError::OperationFailed(e.to_string()))?;
 
