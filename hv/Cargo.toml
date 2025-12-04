@@ -33,11 +33,18 @@ path = "examples/create_vm.rs"
 name = "quick_vm"
 path = "examples/quick_vm.rs"
 
+[[example]]
+name = "wmi_vms"
+path = "examples/wmi_vms.rs"
+
 [target.'cfg(windows)'.dependencies]
-# Windows API bindings - includes HCS (Host Compute System), VHD, and Device APIs
+# Windows API bindings - includes HCS (Host Compute System), VHD, WMI, and Device APIs
 windows = { version = "0.62.2", features = [
     "Win32_Foundation",
     "Win32_System_Com",
+    "Win32_System_Ole",
+    "Win32_System_Variant",
+    "Win32_System_Wmi",
     "Win32_Storage_Vhd",
     "Win32_Storage_FileSystem",
     "Win32_Security",

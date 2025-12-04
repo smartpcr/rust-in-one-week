@@ -174,14 +174,15 @@ fn create_windows_vm(
     println!("    To:   {}", vhdx_path);
     std::fs::copy(template_path, &vhdx_path)?;
 
-    // Create VM
+    // Create VM with existing VHD
     println!("  Creating Gen2 VM...");
-    let vm = hyperv.create_vm(
+    let vm = hyperv.create_vm_with_vhd(
         vm_name,
         memory_mb,
         cpu_count,
         VmGeneration::Gen2,
-        Some(&vhdx_path),
+        &vhdx_path,
+        None, // switch_name
     )?;
 
     println!();
@@ -220,12 +221,13 @@ fn create_linux_vm(
 
     // Create Gen2 VM (Linux works well with Gen2 + Secure Boot disabled)
     println!("  Creating Gen2 VM...");
-    let vm = hyperv.create_vm(
+    let vm = hyperv.create_vm_with_vhd(
         vm_name,
         memory_mb,
         cpu_count,
         VmGeneration::Gen2,
-        Some(&vhdx_path),
+        &vhdx_path,
+        None, // switch_name
     )?;
 
     // Disable Secure Boot for Linux (via PowerShell)
@@ -277,12 +279,13 @@ fn create_windows_clone(
 
     // Create VM
     println!("  Creating Gen2 VM...");
-    let vm = hyperv.create_vm(
+    let vm = hyperv.create_vm_with_vhd(
         vm_name,
         memory_mb,
         cpu_count,
         VmGeneration::Gen2,
-        Some(&vhdx_path),
+        &vhdx_path,
+        None, // switch_name
     )?;
 
     println!();
@@ -320,12 +323,13 @@ fn create_linux_clone(
 
     // Create VM
     println!("  Creating Gen2 VM...");
-    let vm = hyperv.create_vm(
+    let vm = hyperv.create_vm_with_vhd(
         vm_name,
         memory_mb,
         cpu_count,
         VmGeneration::Gen2,
-        Some(&vhdx_path),
+        &vhdx_path,
+        None, // switch_name
     )?;
 
     // Disable Secure Boot
@@ -376,7 +380,14 @@ fn create_dev_windows_vm(
 
     // Create VM with generous resources
     println!("  Creating VM (8GB RAM, 4 CPUs)...");
-    let vm = hyperv.create_vm(vm_name, 8192, 4, VmGeneration::Gen2, Some(&os_vhdx))?;
+    let vm = hyperv.create_vm_with_vhd(
+        vm_name,
+        8192,
+        4,
+        VmGeneration::Gen2,
+        &os_vhdx,
+        None, // switch_name
+    )?;
 
     // Attach data disk
     println!("  Attaching data disk...");
@@ -449,7 +460,14 @@ fn create_dev_linux_vm(
 
     // Create VM
     println!("  Creating VM (8GB RAM, 4 CPUs)...");
-    let vm = hyperv.create_vm(vm_name, 8192, 4, VmGeneration::Gen2, Some(&os_vhdx))?;
+    let vm = hyperv.create_vm_with_vhd(
+        vm_name,
+        8192,
+        4,
+        VmGeneration::Gen2,
+        &os_vhdx,
+        None, // switch_name
+    )?;
 
     // Disable Secure Boot
     println!("  Disabling Secure Boot...");
@@ -527,7 +545,14 @@ fn create_server_vm(
 
     // Create VM with server-grade resources
     println!("  Creating VM (16GB RAM, 8 CPUs)...");
-    let vm = hyperv.create_vm(vm_name, 16384, 8, VmGeneration::Gen2, Some(&vhdx_path))?;
+    let vm = hyperv.create_vm_with_vhd(
+        vm_name,
+        16384,
+        8,
+        VmGeneration::Gen2,
+        &vhdx_path,
+        None, // switch_name
+    )?;
 
     if os_type == "linux" {
         println!("  Disabling Secure Boot...");
@@ -588,7 +613,14 @@ fn create_batch_vms(
         // Use differencing disk for fast creation
         hyperv.create_differencing_vhd(&vhdx_path, template_path)?;
 
-        hyperv.create_vm(&vm_name, 2048, 2, VmGeneration::Gen2, Some(&vhdx_path))?;
+        hyperv.create_vm_with_vhd(
+            &vm_name,
+            2048,
+            2,
+            VmGeneration::Gen2,
+            &vhdx_path,
+            None, // switch_name
+        )?;
 
         println!("  Created: {}", vm_name);
     }

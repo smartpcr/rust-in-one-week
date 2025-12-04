@@ -1,152 +1,159 @@
-//! Main Hyper-V management interface using HCS
+//! Main Hyper-V management interface using WMI
 //!
 //! Provides a high-level API for managing Hyper-V VMs, switches, VHDs, snapshots, and GPUs.
 
 use crate::disk::{self, DvdDrive, FileSystem, HardDiskDrive, PartitionStyle, WindowsEdition};
 use crate::error::{HvError, Result};
 use crate::gpu::{self, AssignableDevice, DdaSupportInfo, GpuInfo, GpuPartitionAdapter};
-use crate::hcs::{self, VmConfiguration};
 use crate::snapshot::{self, Snapshot, SnapshotType};
 use crate::switch::{self, SwitchType, VirtualSwitch};
 use crate::vhd::{self, Vhd, VhdType};
 use crate::vm::{Vm, VmGeneration};
+use crate::wmi::operations::{self as wmi_ops, VhdFormat, VhdType as WmiVhdType};
+use crate::wmi::WmiConnection;
 use serde::{Deserialize, Serialize};
 use std::process::Command;
 
 /// Main interface for Hyper-V management
 pub struct HyperV {
-    _initialized: bool,
+    conn: WmiConnection,
 }
 
 impl HyperV {
     /// Creates a new HyperV management interface
     pub fn new() -> Result<Self> {
-        Ok(HyperV { _initialized: true })
+        let conn = WmiConnection::connect_hyperv()?;
+        Ok(HyperV { conn })
     }
 
     // =========================================================================
     // VM Operations
     // =========================================================================
 
-    /// Lists all virtual machines using HCS enumeration
+    /// Lists all virtual machines using WMI
     pub fn list_vms(&self) -> Result<Vec<Vm>> {
-        // Query only VMs (not containers)
-        let query = r#"{"Owners": null, "Types": ["VirtualMachine"]}"#;
-        let systems = hcs::enumerate_compute_systems(Some(query))?;
+        let wmi_vms = wmi_ops::list_vms(&self.conn)?;
 
-        Ok(systems
-            .iter()
-            .filter(|s| {
-                s.system_type
-                    .as_ref()
-                    .map(|t| t == "VirtualMachine")
-                    .unwrap_or(false)
-            })
-            .map(|info| Vm::from_info(info))
+        Ok(wmi_vms
+            .into_iter()
+            .map(|vm| Vm::from_wmi(&vm))
             .collect())
     }
 
     /// Gets a VM by name
     pub fn get_vm(&self, name: &str) -> Result<Vm> {
-        let vms = self.list_vms()?;
-        vms.into_iter()
-            .find(|vm| vm.name() == name)
-            .ok_or_else(|| HvError::VmNotFound(name.to_string()))
+        let wmi_vm = wmi_ops::get_vm_by_name(&self.conn, name)?;
+        Ok(Vm::from_wmi(&wmi_vm))
     }
 
     /// Gets a VM by ID
     pub fn get_vm_by_id(&self, id: &str) -> Result<Vm> {
-        let system = hcs::open_compute_system(id)?;
-        Ok(Vm::from_system(id.to_string(), id.to_string(), system))
+        let wmi_vm = wmi_ops::get_vm_by_id(&self.conn, id)?;
+        Ok(Vm::from_wmi(&wmi_vm))
     }
 
-    /// Creates a new VM using HCS
+    /// Creates a new VM with a new VHD
+    ///
+    /// This is the standard way to create a VM - it creates both the VM and a new virtual hard disk.
+    ///
+    /// # Arguments
+    /// * `name` - VM name
+    /// * `memory_mb` - Memory in MB
+    /// * `cpu_count` - Number of virtual processors
+    /// * `generation` - VM generation (Gen1 or Gen2)
+    /// * `vhd_path` - Path where the new VHD will be created
+    /// * `vhd_size_bytes` - Size of the VHD in bytes
+    /// * `switch_name` - Optional virtual switch to connect to
     pub fn create_vm(
         &self,
         name: &str,
         memory_mb: u64,
         cpu_count: u32,
         generation: VmGeneration,
-        vhd_path: Option<&str>,
+        vhd_path: &str,
+        vhd_size_bytes: u64,
+        switch_name: Option<&str>,
     ) -> Result<Vm> {
-        let id = uuid::Uuid::new_v4().to_string();
-
-        let config = match generation {
-            VmGeneration::Gen2 => {
-                let mut cfg = VmConfiguration::new_gen2(name, memory_mb, cpu_count);
-                if let Some(vhd) = vhd_path {
-                    cfg = cfg.with_vhd(vhd);
-                }
-                cfg
-            }
-            VmGeneration::Gen1 => {
-                // Gen1 VMs use similar config but with different BIOS settings
-                // For simplicity, we'll use PowerShell for Gen1
-                return self.create_vm_powershell(name, memory_mb, generation, vhd_path);
-            }
+        let gen = match generation {
+            VmGeneration::Gen1 => 1,
+            VmGeneration::Gen2 => 2,
         };
 
-        let config_json = config.to_json()?;
-        let system = hcs::create_compute_system(&id, &config_json)?;
-
-        Ok(Vm::from_system(id, name.to_string(), system))
+        let wmi_vm = wmi_ops::create_vm(
+            &self.conn,
+            name,
+            memory_mb,
+            cpu_count,
+            gen,
+            vhd_path,
+            vhd_size_bytes,
+            switch_name,
+        )?;
+        Ok(Vm::from_wmi(&wmi_vm))
     }
 
-    /// Creates a VM using PowerShell (fallback for Gen1 or complex configs)
-    fn create_vm_powershell(
+    /// Creates a new VM with an existing VHD
+    ///
+    /// Use this when you already have a VHD (e.g., from a template or previous VM).
+    ///
+    /// # Arguments
+    /// * `name` - VM name
+    /// * `memory_mb` - Memory in MB
+    /// * `cpu_count` - Number of virtual processors
+    /// * `generation` - VM generation (Gen1 or Gen2)
+    /// * `vhd_path` - Path to the existing VHD to attach
+    /// * `switch_name` - Optional virtual switch to connect to
+    pub fn create_vm_with_vhd(
         &self,
         name: &str,
         memory_mb: u64,
+        cpu_count: u32,
         generation: VmGeneration,
-        vhd_path: Option<&str>,
+        vhd_path: &str,
+        switch_name: Option<&str>,
     ) -> Result<Vm> {
-        let gen_arg = match generation {
-            VmGeneration::Gen1 => "1",
-            VmGeneration::Gen2 => "2",
+        let gen = match generation {
+            VmGeneration::Gen1 => 1,
+            VmGeneration::Gen2 => 2,
         };
 
-        let mut cmd_str = format!(
-            "New-VM -Name '{}' -MemoryStartupBytes {}MB -Generation {}",
-            name, memory_mb, gen_arg
-        );
-
-        if let Some(vhd) = vhd_path {
-            cmd_str.push_str(&format!(" -VHDPath '{}'", vhd));
-        } else {
-            cmd_str.push_str(" -NoVHD");
-        }
-
-        let output = Command::new("powershell")
-            .args(["-NoProfile", "-Command", &cmd_str])
-            .output()
-            .map_err(|e| HvError::OperationFailed(e.to_string()))?;
-
-        if !output.status.success() {
-            let stderr = String::from_utf8_lossy(&output.stderr);
-            return Err(HvError::OperationFailed(stderr.to_string()));
-        }
-
-        // Return the newly created VM
-        self.get_vm(name)
+        let wmi_vm = wmi_ops::create_vm_with_vhd(
+            &self.conn,
+            name,
+            memory_mb,
+            cpu_count,
+            gen,
+            vhd_path,
+            switch_name,
+        )?;
+        Ok(Vm::from_wmi(&wmi_vm))
     }
 
-    /// Deletes a VM
+    /// Creates a new VHD file using WMI
+    ///
+    /// # Arguments
+    /// * `path` - Path where the VHD file will be created
+    /// * `size_bytes` - Size of the VHD in bytes
+    /// * `dynamic` - If true, creates a dynamic VHD; if false, creates a fixed VHD
+    pub fn create_vhd_wmi(&self, path: &str, size_bytes: u64, dynamic: bool) -> Result<()> {
+        let vhd_type = if dynamic {
+            WmiVhdType::Dynamic
+        } else {
+            WmiVhdType::Fixed
+        };
+
+        let vhd_format = if path.to_lowercase().ends_with(".vhdx") {
+            VhdFormat::Vhdx
+        } else {
+            VhdFormat::Vhd
+        };
+
+        wmi_ops::create_vhd(&self.conn, path, size_bytes, vhd_type, vhd_format)
+    }
+
+    /// Deletes a VM using WMI
     pub fn delete_vm(&self, name: &str) -> Result<()> {
-        let output = Command::new("powershell")
-            .args([
-                "-NoProfile",
-                "-Command",
-                &format!("Remove-VM -Name '{}' -Force", name),
-            ])
-            .output()
-            .map_err(|e| HvError::OperationFailed(e.to_string()))?;
-
-        if !output.status.success() {
-            let stderr = String::from_utf8_lossy(&output.stderr);
-            return Err(HvError::OperationFailed(stderr.to_string()));
-        }
-
-        Ok(())
+        wmi_ops::delete_vm(&self.conn, name)
     }
 
     /// Imports a VM from an exported configuration

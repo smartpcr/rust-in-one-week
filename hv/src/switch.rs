@@ -104,7 +104,7 @@ impl VirtualSwitch {
             .args([
                 "-NoProfile",
                 "-Command",
-                &format!("(Get-VMSwitch -Id '{}').SwitchType", self.switch_id),
+                &format!("(Get-VMSwitch -Name '{}').SwitchType", self.name),
             ])
             .output()
             .map_err(|e| HvError::OperationFailed(format!("Failed to query switch type: {}", e)))?;
@@ -154,8 +154,8 @@ impl VirtualSwitch {
                 "-NoProfile",
                 "-Command",
                 &format!(
-                    "(Get-VMSwitch -Id '{}').NetAdapterInterfaceDescription",
-                    self.switch_id
+                    "(Get-VMSwitch -Name '{}').NetAdapterInterfaceDescription",
+                    self.name
                 ),
             ])
             .output()
@@ -183,7 +183,7 @@ impl VirtualSwitch {
             .args([
                 "-NoProfile",
                 "-Command",
-                &format!("(Get-VMSwitch -Id '{}').AllowManagementOS", self.switch_id),
+                &format!("(Get-VMSwitch -Name '{}').AllowManagementOS", self.name),
             ])
             .output()
             .map_err(|e| {
@@ -200,11 +200,13 @@ impl VirtualSwitch {
 
     /// Deletes this virtual switch
     pub fn delete(&self) -> Result<()> {
+        // Use -Name instead of -Id for more reliable deletion
+        // PowerShell's -Id parameter can have GUID format issues
         let output = Command::new("powershell")
             .args([
                 "-NoProfile",
                 "-Command",
-                &format!("Remove-VMSwitch -Id '{}' -Force", self.switch_id),
+                &format!("Remove-VMSwitch -Name '{}' -Force", self.name),
             ])
             .output()
             .map_err(|e| HvError::OperationFailed(format!("Failed to delete switch: {}", e)))?;
@@ -384,8 +386,19 @@ pub fn get_switch(name: &str) -> Result<VirtualSwitch> {
         return Err(HvError::SwitchNotFound(name.to_string()));
     }
 
-    let info: SwitchInfo = serde_json::from_str(trimmed)
-        .map_err(|e| HvError::JsonError(format!("Failed to parse switch: {}", e)))?;
+    // Handle both single object and array (PowerShell returns array for multiple matches)
+    let info: SwitchInfo = if trimmed.starts_with('[') {
+        let switches: Vec<SwitchInfo> = serde_json::from_str(trimmed)
+            .map_err(|e| HvError::JsonError(format!("Failed to parse switch list: {}", e)))?;
+        // Find exact match by name
+        switches
+            .into_iter()
+            .find(|s| s.name.as_deref() == Some(name))
+            .ok_or_else(|| HvError::SwitchNotFound(name.to_string()))?
+    } else {
+        serde_json::from_str(trimmed)
+            .map_err(|e| HvError::JsonError(format!("Failed to parse switch: {}", e)))?
+    };
 
     let id = info
         .id

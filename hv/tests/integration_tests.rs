@@ -9,14 +9,18 @@ mod hyperv_tests {
 
     /// Helper to check if an error is a permission error
     fn is_permission_error(err: &HvError) -> bool {
-        match err {
-            HvError::OperationFailed(msg) => {
-                msg.contains("permission")
-                    || msg.contains("authorization")
-                    || msg.contains("Access is denied")
-            }
-            _ => false,
-        }
+        let msg = match err {
+            HvError::OperationFailed(msg) => msg.as_str(),
+            HvError::WmiError(msg) => msg.as_str(),
+            HvError::ConnectionFailed(msg) => msg.as_str(),
+            _ => return false,
+        };
+        msg.contains("permission")
+            || msg.contains("authorization")
+            || msg.contains("Access is denied")
+            || msg.contains("access denied")
+            || msg.contains("0x80070005") // E_ACCESSDENIED
+            || msg.contains("0x80041003") // WBEM_E_ACCESS_DENIED
     }
 
     /// Test connecting to Hyper-V
@@ -213,20 +217,45 @@ mod hyperv_tests {
     #[test]
     #[ignore] // Requires Hyper-V and admin privileges
     fn test_vm_lifecycle() {
+        use std::path::Path;
+
         let hyperv = HyperV::new().expect("Failed to connect");
         let vm_name = "HvTestVM_IntegrationTest";
 
         // Clean up if exists from previous run
         let _ = hyperv.delete_vm(vm_name);
 
-        // Create VM
-        match hyperv.create_vm(vm_name, 512, 2, VmGeneration::Gen2, None) {
+        // Ensure VHD directory exists
+        let vhd_dir = "C:\\Hyper-V\\Virtual Hard Disks";
+        if !Path::new(vhd_dir).exists() {
+            std::fs::create_dir_all(vhd_dir).expect("Failed to create VHD directory");
+        }
+
+        // Create VM with a new VHD
+        let vhd_path = format!("{}\\{}.vhdx", vhd_dir, vm_name);
+
+        // Clean up VHD if exists from previous run
+        let _ = std::fs::remove_file(&vhd_path);
+
+        let vhd_size = 10 * 1024 * 1024 * 1024u64; // 10GB for test
+        match hyperv.create_vm(
+            vm_name,
+            512,
+            2,
+            VmGeneration::Gen2,
+            &vhd_path,
+            vhd_size,
+            None, // switch_name
+        ) {
             Ok(mut vm) => {
                 assert_eq!(vm.name(), vm_name);
                 assert_eq!(vm.state().unwrap(), VmState::Off);
 
                 // Delete VM
                 hyperv.delete_vm(vm_name).expect("Failed to delete VM");
+
+                // Clean up VHD file
+                let _ = std::fs::remove_file(&vhd_path);
 
                 // Verify deleted
                 assert!(hyperv.get_vm(vm_name).is_err());

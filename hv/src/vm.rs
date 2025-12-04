@@ -1,9 +1,10 @@
-//! Virtual Machine management using HCS (Host Compute Service)
+//! Virtual Machine management using WMI
 //!
-//! Uses windows-rs HCS bindings directly for VM operations.
+//! Uses WMI Msvm_* classes for VM operations.
 
 use crate::error::{HvError, Result};
-use crate::hcs::{self, ComputeSystemInfo, HcsSystem};
+use crate::wmi::msvm::MsvmVm;
+use crate::wmi::{hyperv::EnabledState, operations as wmi_ops, WmiConnection};
 use serde::{Deserialize, Serialize};
 
 /// VM state enumeration
@@ -22,7 +23,24 @@ pub enum VmState {
 }
 
 impl VmState {
-    /// Parse state from HCS state string
+    /// Parse state from WMI EnabledState
+    pub fn from_enabled_state(state: EnabledState) -> Self {
+        match state {
+            EnabledState::Enabled => VmState::Running,
+            EnabledState::Disabled => VmState::Off,
+            EnabledState::Stopping => VmState::Stopping,
+            EnabledState::Suspended => VmState::Saved,
+            EnabledState::Paused => VmState::Paused,
+            EnabledState::Starting | EnabledState::Starting2 => VmState::Starting,
+            EnabledState::Saving => VmState::Saving,
+            EnabledState::Pausing => VmState::Pausing,
+            EnabledState::Resuming => VmState::Resuming,
+            EnabledState::ShuttingDown => VmState::Stopping,
+            _ => VmState::Unknown,
+        }
+    }
+
+    /// Parse state from HCS state string (for backward compatibility)
     pub fn from_hcs_state(state: &str) -> Self {
         match state.to_lowercase().as_str() {
             "running" => VmState::Running,
@@ -68,7 +86,7 @@ pub enum VmGeneration {
     Gen2,
 }
 
-/// Properties returned from HCS
+/// Properties returned from HCS (kept for compatibility)
 #[derive(Debug, Clone, Serialize, Deserialize)]
 #[serde(rename_all = "PascalCase")]
 pub struct VmProperties {
@@ -98,29 +116,26 @@ pub struct VmProcessorProperties {
     pub count: Option<u32>,
 }
 
-/// Represents a Hyper-V virtual machine managed via HCS
+/// Represents a Hyper-V virtual machine managed via WMI
 pub struct Vm {
     id: String,
     name: String,
-    system: Option<HcsSystem>,
+    current_state: VmState,
+    memory_mb: Option<u64>,
+    processor_count: Option<u32>,
+    generation: Option<u32>,
 }
 
 impl Vm {
-    /// Create a new VM handle from enumeration info
-    pub(crate) fn from_info(info: &ComputeSystemInfo) -> Self {
+    /// Create a new VM handle from WMI info
+    pub(crate) fn from_wmi(vm: &MsvmVm) -> Self {
         Vm {
-            id: info.id.clone(),
-            name: info.name.clone().unwrap_or_else(|| info.id.clone()),
-            system: None,
-        }
-    }
-
-    /// Create a new VM handle with an open HCS system
-    pub(crate) fn from_system(id: String, name: String, system: HcsSystem) -> Self {
-        Vm {
-            id,
-            name,
-            system: Some(system),
+            id: vm.id.clone(),
+            name: vm.name.clone(),
+            current_state: VmState::from_enabled_state(vm.enabled_state),
+            memory_mb: vm.memory_mb,
+            processor_count: vm.processor_count,
+            generation: vm.generation,
         }
     }
 
@@ -134,57 +149,18 @@ impl Vm {
         &self.id
     }
 
-    /// Open the HCS system handle if not already open
-    fn ensure_open(&mut self) -> Result<&HcsSystem> {
-        if self.system.is_none() {
-            let system = hcs::open_compute_system(&self.id)?;
-            self.system = Some(system);
-        }
-        Ok(self.system.as_ref().unwrap())
-    }
-
     /// Gets the current state of the VM
     pub fn state(&mut self) -> Result<VmState> {
-        // Try HCS first
-        if let Ok(system) = self.ensure_open() {
-            if let Ok(Some(props_json)) = system.get_properties(None) {
-                if let Ok(props) = serde_json::from_str::<VmProperties>(&props_json) {
-                    if let Some(state_str) = props.state {
-                        let state = VmState::from_hcs_state(&state_str);
-                        if state != VmState::Unknown {
-                            return Ok(state);
-                        }
-                    }
-                }
-            }
-        }
-
-        // Fallback to PowerShell for traditional Hyper-V VMs
-        self.state_via_powershell()
+        // Refresh state from WMI
+        let conn = WmiConnection::connect_hyperv()?;
+        let wmi_vm = wmi_ops::get_vm_by_name(&conn, &self.name)?;
+        self.current_state = VmState::from_enabled_state(wmi_vm.enabled_state);
+        Ok(self.current_state)
     }
 
-    /// Gets VM state using PowerShell (fallback)
-    fn state_via_powershell(&self) -> Result<VmState> {
-        use std::process::Command;
-
-        let output = Command::new("powershell")
-            .args([
-                "-NoProfile",
-                "-Command",
-                &format!(
-                    "(Get-VM -Name '{}' -ErrorAction SilentlyContinue).State",
-                    self.name
-                ),
-            ])
-            .output()
-            .map_err(|e| HvError::OperationFailed(format!("Failed to query VM state: {}", e)))?;
-
-        if !output.status.success() {
-            return Ok(VmState::Unknown);
-        }
-
-        let stdout = String::from_utf8_lossy(&output.stdout);
-        Ok(VmState::from_hcs_state(stdout.trim()))
+    /// Gets the cached state without refreshing
+    pub fn cached_state(&self) -> VmState {
+        self.current_state
     }
 
     /// Starts the VM
@@ -200,8 +176,9 @@ impl Vm {
             )));
         }
 
-        let system = self.ensure_open()?;
-        system.start(None)?;
+        let conn = WmiConnection::connect_hyperv()?;
+        wmi_ops::start_vm(&conn, &self.name)?;
+        self.current_state = VmState::Starting;
 
         Ok(())
     }
@@ -213,22 +190,18 @@ impl Vm {
             return Ok(());
         }
 
-        let system = self.ensure_open()?;
-
-        // Try graceful shutdown first
-        let options = r#"{"Type": "GracefulShutdown"}"#;
-        if system.shutdown(Some(options)).is_err() {
-            // Fall back to hard shutdown
-            system.shutdown(None)?;
-        }
+        let conn = WmiConnection::connect_hyperv()?;
+        wmi_ops::shutdown_vm(&conn, &self.name)?;
+        self.current_state = VmState::Stopping;
 
         Ok(())
     }
 
     /// Forces the VM to power off immediately
     pub fn force_stop(&mut self) -> Result<()> {
-        let system = self.ensure_open()?;
-        system.terminate()?;
+        let conn = WmiConnection::connect_hyperv()?;
+        wmi_ops::stop_vm(&conn, &self.name)?;
+        self.current_state = VmState::Off;
         Ok(())
     }
 
@@ -245,8 +218,9 @@ impl Vm {
             )));
         }
 
-        let system = self.ensure_open()?;
-        system.pause(None)?;
+        let conn = WmiConnection::connect_hyperv()?;
+        wmi_ops::pause_vm(&conn, &self.name)?;
+        self.current_state = VmState::Pausing;
 
         Ok(())
     }
@@ -257,15 +231,16 @@ impl Vm {
         if state.is_running() {
             return Ok(());
         }
-        if state != VmState::Paused {
+        if state != VmState::Paused && state != VmState::Saved {
             return Err(HvError::InvalidState(format!(
-                "VM must be Paused to resume (current: {:?})",
+                "VM must be Paused or Saved to resume (current: {:?})",
                 state
             )));
         }
 
-        let system = self.ensure_open()?;
-        system.resume()?;
+        let conn = WmiConnection::connect_hyperv()?;
+        wmi_ops::resume_vm(&conn, &self.name)?;
+        self.current_state = VmState::Resuming;
 
         Ok(())
     }
@@ -283,57 +258,48 @@ impl Vm {
             )));
         }
 
-        let system = self.ensure_open()?;
-        system.save(None)?;
+        let conn = WmiConnection::connect_hyperv()?;
+        wmi_ops::save_vm(&conn, &self.name)?;
+        self.current_state = VmState::Saving;
 
         Ok(())
     }
 
     /// Gets the number of virtual CPUs
     pub fn cpu_count(&mut self) -> Result<u32> {
-        let system = self.ensure_open()?;
-
-        let query = r#"{"PropertyTypes": ["Processor"]}"#;
-        let properties = system.get_properties(Some(query))?;
-
-        if let Some(props_json) = properties {
-            let props: VmProperties = serde_json::from_str(&props_json)?;
-            if let Some(proc) = props.processor {
-                return Ok(proc.count.unwrap_or(1));
-            }
+        if let Some(count) = self.processor_count {
+            return Ok(count);
         }
 
-        Ok(1)
+        // Refresh from WMI
+        let conn = WmiConnection::connect_hyperv()?;
+        let proc = wmi_ops::get_vm_processor_settings(&conn, &self.id)?;
+        self.processor_count = Some(proc.virtual_quantity);
+        Ok(proc.virtual_quantity)
     }
 
     /// Gets the memory size in MB
     pub fn memory_mb(&mut self) -> Result<u64> {
-        let system = self.ensure_open()?;
-
-        let query = r#"{"PropertyTypes": ["Memory"]}"#;
-        let properties = system.get_properties(Some(query))?;
-
-        if let Some(props_json) = properties {
-            let props: VmProperties = serde_json::from_str(&props_json)?;
-            if let Some(mem) = props.memory {
-                if let Some(size) = mem.virtual_machine_memory {
-                    return Ok(size / (1024 * 1024)); // Convert to MB
-                }
-            }
+        if let Some(mem) = self.memory_mb {
+            return Ok(mem);
         }
 
-        Ok(0)
+        // Refresh from WMI
+        let conn = WmiConnection::connect_hyperv()?;
+        let mem = wmi_ops::get_vm_memory_settings(&conn, &self.id)?;
+        self.memory_mb = Some(mem.virtual_quantity_mb);
+        Ok(mem.virtual_quantity_mb)
     }
 
-    /// Closes the HCS system handle
-    pub fn close(&mut self) {
-        self.system = None;
-    }
-}
-
-impl Drop for Vm {
-    fn drop(&mut self) {
-        self.close();
+    /// Gets the VM generation
+    pub fn generation(&self) -> Option<VmGeneration> {
+        self.generation.map(|g| {
+            if g == 2 {
+                VmGeneration::Gen2
+            } else {
+                VmGeneration::Gen1
+            }
+        })
     }
 }
 
@@ -342,7 +308,10 @@ impl std::fmt::Debug for Vm {
         f.debug_struct("Vm")
             .field("name", &self.name)
             .field("id", &self.id)
-            .field("has_handle", &self.system.is_some())
+            .field("state", &self.current_state)
+            .field("memory_mb", &self.memory_mb)
+            .field("cpu_count", &self.processor_count)
+            .field("generation", &self.generation)
             .finish()
     }
 }

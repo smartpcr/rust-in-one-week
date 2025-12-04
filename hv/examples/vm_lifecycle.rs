@@ -23,7 +23,7 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
         eprintln!("  save <vm_name>          - Save VM state");
         eprintln!("  snapshot <vm_name> <snapshot_name> - Create a snapshot");
         eprintln!("  restore <vm_name> <snapshot_name>  - Restore a snapshot");
-        eprintln!("  create <vm_name> <memory_mb>       - Create a new Gen2 VM");
+        eprintln!("  create <vm_name> <memory_mb> [vhd_gb] - Create a new Gen2 VM with VHD");
         eprintln!("  delete <vm_name>        - Delete a VM");
         std::process::exit(1);
     }
@@ -148,10 +148,27 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
                 .ok_or("Missing memory size")?
                 .parse()
                 .map_err(|_| "Invalid memory size")?;
+            let vhd_size_gb: u64 = args
+                .get(4)
+                .map(|s| s.parse().unwrap_or(64))
+                .unwrap_or(64);
 
-            println!("Creating VM '{}' with {} MB memory...", vm_name, memory_mb);
-            let vm = hyperv.create_vm(vm_name, memory_mb, 2, VmGeneration::Gen2, None)?;
+            // Default VHD path
+            let vhd_path = format!("C:\\Hyper-V\\Virtual Hard Disks\\{}.vhdx", vm_name);
+            let vhd_size_bytes = vhd_size_gb * 1024 * 1024 * 1024;
+
+            println!("Creating VM '{}' with {} MB memory, {}GB disk...", vm_name, memory_mb, vhd_size_gb);
+            let vm = hyperv.create_vm(
+                vm_name,
+                memory_mb,
+                2,
+                VmGeneration::Gen2,
+                &vhd_path,
+                vhd_size_bytes,
+                None, // switch_name
+            )?;
             println!("VM created: {} ({})", vm.name(), vm.id());
+            println!("VHD: {}", vhd_path);
         }
 
         "delete" => {

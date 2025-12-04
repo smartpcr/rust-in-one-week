@@ -119,8 +119,14 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
 
             // 2. Create VM with the VHDX
             println!("  Creating Gen2 VM...");
-            let vm =
-                hyperv.create_vm(vm_name, memory_mb, 2, VmGeneration::Gen2, Some(&vhdx_path))?;
+            let vm = hyperv.create_vm_with_vhd(
+                vm_name,
+                memory_mb,
+                2,
+                VmGeneration::Gen2,
+                &vhdx_path,
+                None, // switch_name
+            )?;
 
             // 3. Add DVD drive and mount ISO
             println!("  Adding DVD drive...");
@@ -158,12 +164,13 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
 
             println!("Creating VM from existing VHDX...\n");
 
-            let vm = hyperv.create_vm(
+            let vm = hyperv.create_vm_with_vhd(
                 vm_name,
                 memory_mb,
                 cpu_count,
                 VmGeneration::Gen2,
-                Some(vhdx_path),
+                vhdx_path,
+                None, // switch_name
             )?;
 
             println!("VM '{}' created successfully!", vm_name);

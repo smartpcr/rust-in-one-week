@@ -40,6 +40,9 @@ pub enum HvError {
     #[error("HCS error: {0}")]
     HcsError(String),
 
+    #[error("WMI error: {0}")]
+    WmiError(String),
+
     #[cfg(windows)]
     #[error("Windows API error: {0}")]
     WindowsError(#[from] windows::core::Error),

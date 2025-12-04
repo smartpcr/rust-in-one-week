@@ -37,6 +37,8 @@ mod hcs;
 #[cfg(windows)]
 mod hyperv;
 #[cfg(windows)]
+mod hyperv_wmi;
+#[cfg(windows)]
 mod snapshot;
 #[cfg(windows)]
 mod switch;
@@ -44,6 +46,8 @@ mod switch;
 mod vhd;
 #[cfg(windows)]
 mod vm;
+#[cfg(windows)]
+pub mod wmi;
 
 #[cfg(windows)]
 pub use disk::{DvdDrive, FileSystem, HardDiskDrive, PartitionStyle, WindowsEdition};
@@ -52,6 +56,8 @@ pub use error::{HvError, Result};
 pub use gpu::{AssignableDevice, DdaSupportInfo, GpuInfo, GpuPartitionAdapter};
 #[cfg(windows)]
 pub use hyperv::HyperV;
+#[cfg(windows)]
+pub use hyperv_wmi::HyperVWmi;
 #[cfg(windows)]
 pub use snapshot::{Snapshot, SnapshotType};
 #[cfg(windows)]
