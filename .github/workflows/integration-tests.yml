@@ -118,13 +118,30 @@ jobs:
           path: |
             ~/.cargo/registry
             ~/.cargo/git
-            target
           key: ${{ runner.os }}-cargo-cluster-${{ hashFiles('**/Cargo.lock') }}
           restore-keys: |
             ${{ runner.os }}-cargo-cluster-
 
+      - name: Exclude build directories from Windows Defender
+        shell: pwsh
+        run: |
+          Add-MpPreference -ExclusionPath "$env:GITHUB_WORKSPACE\target" -ErrorAction SilentlyContinue
+          Add-MpPreference -ExclusionPath "$env:USERPROFILE\.cargo" -ErrorAction SilentlyContinue
+          Add-MpPreference -ExclusionProcess "rustc.exe" -ErrorAction SilentlyContinue
+          Add-MpPreference -ExclusionProcess "cargo.exe" -ErrorAction SilentlyContinue
+          Add-MpPreference -ExclusionProcess "link.exe" -ErrorAction SilentlyContinue
+        continue-on-error: true
+
+      - name: Clean target directory
+        shell: pwsh
+        run: |
+          if (Test-Path "target") {
+            Remove-Item -Path "target" -Recurse -Force -ErrorAction SilentlyContinue
+          }
+        continue-on-error: true
+
       - name: Build workspace
-        run: cargo build --workspace --verbose
+        run: cargo build --workspace --verbose -j 1
 
       - name: Run unit tests
         run: cargo test --workspace --verbose
