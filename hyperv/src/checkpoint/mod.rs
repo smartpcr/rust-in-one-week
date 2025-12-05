@@ -27,10 +27,16 @@ impl Checkpoint {
     pub(crate) fn from_wmi(obj: &IWbemClassObject) -> Result<Self> {
         let name = obj.get_string_prop_required("ElementName")?;
         let id = obj.get_string_prop_required("InstanceID")?;
-        let vm_id = obj.get_string_prop("VirtualSystemIdentifier")?.unwrap_or_default();
+        let vm_id = obj
+            .get_string_prop("VirtualSystemIdentifier")?
+            .unwrap_or_default();
         let parent_id = obj.get_string_prop("Parent")?;
         let creation_time = obj.get_string_prop("CreationTime")?.unwrap_or_default();
-        let notes = obj.get_string_prop("Notes")?;
+        // Notes is a string array in Hyper-V v2, join with newlines
+        let notes = obj
+            .get_string_array("Notes")?
+            .map(|arr| arr.join("\n"))
+            .filter(|s| !s.is_empty());
         let path = obj.get_path()?;
 
         Ok(Self {
@@ -163,5 +169,124 @@ impl ConsistencyLevel {
             ConsistencyLevel::ApplicationConsistent => 1,
             ConsistencyLevel::CrashConsistent => 2,
         }
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn test_consistency_level_to_value() {
+        assert_eq!(ConsistencyLevel::ApplicationConsistent.to_value(), 1);
+        assert_eq!(ConsistencyLevel::CrashConsistent.to_value(), 2);
+    }
+
+    #[test]
+    fn test_consistency_level_default() {
+        assert_eq!(
+            ConsistencyLevel::default(),
+            ConsistencyLevel::ApplicationConsistent
+        );
+    }
+
+    #[test]
+    fn test_checkpoint_settings_builder_valid() {
+        let result = CheckpointSettings::builder().name("TestCheckpoint").build();
+        assert!(result.is_ok());
+        let settings = result.unwrap();
+        assert_eq!(settings.name, "TestCheckpoint");
+        assert_eq!(settings.checkpoint_type, CheckpointType::Production);
+        assert_eq!(
+            settings.consistency_level,
+            ConsistencyLevel::ApplicationConsistent
+        );
+    }
+
+    #[test]
+    fn test_checkpoint_settings_builder_missing_name() {
+        let result = CheckpointSettings::builder().build();
+        assert!(result.is_err());
+    }
+
+    #[test]
+    fn test_checkpoint_settings_validation_empty_name() {
+        let result = CheckpointSettings::builder().name("").build();
+        assert!(result.is_err());
+    }
+
+    #[test]
+    fn test_checkpoint_settings_validation_name_too_long() {
+        let long_name = "a".repeat(101);
+        let result = CheckpointSettings::builder().name(long_name).build();
+        assert!(result.is_err());
+    }
+
+    #[test]
+    fn test_checkpoint_settings_with_notes() {
+        let result = CheckpointSettings::builder()
+            .name("TestCheckpoint")
+            .notes("This is a test checkpoint")
+            .build();
+        assert!(result.is_ok());
+        let settings = result.unwrap();
+        assert_eq!(
+            settings.notes,
+            Some("This is a test checkpoint".to_string())
+        );
+    }
+
+    #[test]
+    fn test_checkpoint_settings_with_checkpoint_type() {
+        let result = CheckpointSettings::builder()
+            .name("StandardCheckpoint")
+            .checkpoint_type(CheckpointType::Standard)
+            .build();
+        assert!(result.is_ok());
+        let settings = result.unwrap();
+        assert_eq!(settings.checkpoint_type, CheckpointType::Standard);
+    }
+
+    #[test]
+    fn test_checkpoint_settings_with_consistency_level() {
+        let result = CheckpointSettings::builder()
+            .name("CrashConsistentCheckpoint")
+            .consistency_level(ConsistencyLevel::CrashConsistent)
+            .build();
+        assert!(result.is_ok());
+        let settings = result.unwrap();
+        assert_eq!(
+            settings.consistency_level,
+            ConsistencyLevel::CrashConsistent
+        );
+    }
+
+    #[test]
+    fn test_checkpoint_settings_all_options() {
+        let result = CheckpointSettings::builder()
+            .name("FullCheckpoint")
+            .notes("Full featured checkpoint")
+            .checkpoint_type(CheckpointType::ProductionOnly)
+            .consistency_level(ConsistencyLevel::ApplicationConsistent)
+            .build();
+
+        assert!(result.is_ok());
+        let settings = result.unwrap();
+        assert_eq!(settings.name, "FullCheckpoint");
+        assert_eq!(settings.notes, Some("Full featured checkpoint".to_string()));
+        assert_eq!(settings.checkpoint_type, CheckpointType::ProductionOnly);
+        assert_eq!(
+            settings.consistency_level,
+            ConsistencyLevel::ApplicationConsistent
+        );
+    }
+
+    #[test]
+    fn test_checkpoint_settings_max_length_name() {
+        let name = "a".repeat(100);
+        let result = CheckpointSettings::builder().name(name.clone()).build();
+        assert!(result.is_ok());
+        let settings = result.unwrap();
+        assert_eq!(settings.name.len(), 100);
     }
 }

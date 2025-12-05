@@ -147,7 +147,7 @@ impl WmiConnection {
                 })?;
             obj.ok_or_else(|| Error::WmiQuery {
                 query: path.to_string(),
-                source: windows_core::Error::from_hresult(windows_core::HRESULT(-1)),
+                source: windows::core::Error::from_hresult(windows::core::HRESULT(-1)),
             })
         }
     }
@@ -168,6 +168,71 @@ impl WmiConnection {
                 source: e,
             })
         }
+    }
+
+    /// Get default resource settings from Hyper-V's allocation capabilities.
+    ///
+    /// This queries Msvm_ResourcePool -> Msvm_AllocationCapabilities -> Msvm_SettingsDefineCapabilities
+    /// to get the default/template settings for a given resource type.
+    ///
+    /// This is the correct way to create resources - Hyper-V expects default instances
+    /// with all required properties pre-populated, not blank instances from SpawnInstance.
+    pub fn get_default_resource(&self, resource_subtype: &str) -> Result<IWbemClassObject> {
+        // Query the resource pool for this subtype
+        let pool_query = format!(
+            "SELECT * FROM Msvm_ResourcePool WHERE ResourceSubType = '{}' AND Primordial = TRUE",
+            resource_subtype.replace('\'', "''")
+        );
+        let pool = self
+            .query_first(&pool_query)?
+            .ok_or_else(|| Error::OperationFailed {
+                operation: "GetDefaultResource",
+                return_value: 0,
+                message: format!("Resource pool not found for subtype: {}", resource_subtype),
+            })?;
+        let pool_path = pool.get_path()?;
+
+        // Get the allocation capabilities for this pool
+        let caps_query = format!(
+            "ASSOCIATORS OF {{{}}} WHERE AssocClass = Msvm_ElementCapabilities ResultClass = Msvm_AllocationCapabilities",
+            pool_path
+        );
+        let caps = self
+            .query_first(&caps_query)?
+            .ok_or_else(|| Error::OperationFailed {
+                operation: "GetDefaultResource",
+                return_value: 0,
+                message: "Allocation capabilities not found".to_string(),
+            })?;
+        let caps_path = caps.get_path()?;
+
+        // Get the SettingsDefineCapabilities associations to find the default settings
+        let assoc_query = format!(
+            "REFERENCES OF {{{}}} WHERE ResultClass = Msvm_SettingsDefineCapabilities",
+            caps_path
+        );
+        let assoc_results = self.query(&assoc_query)?;
+
+        // Look for the association with ValueRole = 0 (Default)
+        for assoc in assoc_results {
+            // ValueRole: 0=Default, 1=Supported, 2=Minimum, 3=Maximum, 4=Increment
+            if let Some(role) = assoc.get_u32("ValueRole")? {
+                if role == 0 {
+                    // Get the PartComponent which is the path to the default setting
+                    if let Some(part_component) = assoc.get_string_prop("PartComponent")? {
+                        // Get the actual default setting object
+                        let default_setting = self.get_object(&part_component)?;
+                        return Ok(default_setting);
+                    }
+                }
+            }
+        }
+
+        Err(Error::OperationFailed {
+            operation: "GetDefaultResource",
+            return_value: 0,
+            message: format!("Default settings not found for resource: {}", resource_subtype),
+        })
     }
 
     /// Execute a method on a WMI object.
@@ -202,7 +267,7 @@ impl WmiConnection {
             out_params.ok_or_else(|| Error::WmiMethod {
                 class: "Object",
                 method: Box::leak(method_name_owned.into_boxed_str()),
-                source: windows_core::Error::from_hresult(windows_core::HRESULT(-1)),
+                source: windows::core::Error::from_hresult(windows::core::HRESULT(-1)),
             })
         }
     }
@@ -221,7 +286,12 @@ impl WmiConnection {
             let mut in_params = None;
             let mut out_params = None;
             class
-                .GetMethod(PCWSTR(method_hstring.as_ptr()), 0, &mut in_params, &mut out_params)
+                .GetMethod(
+                    PCWSTR(method_hstring.as_ptr()),
+                    0,
+                    &mut in_params,
+                    &mut out_params,
+                )
                 .map_err(|e| Error::WmiMethod {
                     class: Box::leak(class_name_owned.clone().into_boxed_str()),
                     method: Box::leak(method_name_owned.clone().into_boxed_str()),
@@ -239,7 +309,7 @@ impl WmiConnection {
                 .ok_or_else(|| Error::WmiMethod {
                     class: Box::leak(class_name_owned.into_boxed_str()),
                     method: Box::leak(method_name_owned.into_boxed_str()),
-                    source: windows_core::Error::from_hresult(windows_core::HRESULT(-1)),
+                    source: windows::core::Error::from_hresult(windows::core::HRESULT(-1)),
                 })
         }
     }
@@ -296,6 +366,9 @@ pub trait WbemClassObjectExt {
     /// Get the relative path (__RELPATH).
     fn get_relpath(&self) -> Result<std::string::String>;
 
+    /// Get a string array property.
+    fn get_string_array(&self, name: &str) -> Result<Option<Vec<std::string::String>>>;
+
     /// Set a string property.
     fn put_string(&self, name: &str, value: &str) -> Result<()>;
 
@@ -320,7 +393,7 @@ pub trait WbemClassObjectExt {
 
 impl WbemClassObjectExt for IWbemClassObject {
     fn get_string_prop(&self, name: &str) -> Result<Option<std::string::String>> {
-        use windows::Win32::System::Variant::{VARIANT, VT_BSTR, VT_NULL, VT_EMPTY};
+        use windows::Win32::System::Variant::{VARIANT, VT_BSTR, VT_EMPTY, VT_NULL};
 
         unsafe {
             let name_hstring = HSTRING::from(name);
@@ -335,7 +408,8 @@ impl WbemClassObjectExt for IWbemClassObject {
             }
             if vt == VT_BSTR {
                 let bstr = &value.Anonymous.Anonymous.Anonymous.bstrVal;
-                let s: std::string::String = std::string::String::try_from(&**bstr).unwrap_or_default();
+                let s: std::string::String =
+                    std::string::String::try_from(&**bstr).unwrap_or_default();
                 return Ok(Some(s));
             }
             Err(Error::TypeConversion {
@@ -418,12 +492,29 @@ impl WbemClassObjectExt for IWbemClassObject {
         self.get_string_prop_required("__RELPATH")
     }
 
-    fn put_string(&self, name: &str, value: &str) -> Result<()> {
-        use super::variant::ToVariant;
+    fn get_string_array(&self, name: &str) -> Result<Option<Vec<std::string::String>>> {
+        use crate::wmi::variant::FromVariant;
+        use windows::Win32::System::Variant::VARIANT;
 
         unsafe {
             let name_hstring = HSTRING::from(name);
-            let variant = value.to_variant();
+            let mut value = VARIANT::default();
+            let hr = self.Get(PCWSTR(name_hstring.as_ptr()), 0, &mut value, None, None);
+            if hr.is_err() {
+                return Ok(None);
+            }
+            Vec::<std::string::String>::from_variant(&value)
+        }
+    }
+
+    fn put_string(&self, name: &str, value: &str) -> Result<()> {
+        use windows::Win32::System::Variant::VARIANT;
+
+        unsafe {
+            let name_hstring = HSTRING::from(name);
+            // Use windows crate's built-in VARIANT::from(BSTR) conversion
+            // This matches the working hv module implementation
+            let variant = VARIANT::from(BSTR::from(value));
             self.Put(PCWSTR(name_hstring.as_ptr()), 0, &variant, 0)
                 .map_err(|e| Error::WmiMethod {
                     class: "IWbemClassObject",
@@ -434,11 +525,12 @@ impl WbemClassObjectExt for IWbemClassObject {
     }
 
     fn put_u16(&self, name: &str, value: u16) -> Result<()> {
-        use super::variant::ToVariant;
+        use windows::Win32::System::Variant::VARIANT;
 
         unsafe {
             let name_hstring = HSTRING::from(name);
-            let variant = value.to_variant();
+            // Use i16 conversion as per hv module (WMI expects signed for uint16)
+            let variant = VARIANT::from(value as i16);
             self.Put(PCWSTR(name_hstring.as_ptr()), 0, &variant, 0)
                 .map_err(|e| Error::WmiMethod {
                     class: "IWbemClassObject",
@@ -449,11 +541,12 @@ impl WbemClassObjectExt for IWbemClassObject {
     }
 
     fn put_u32(&self, name: &str, value: u32) -> Result<()> {
-        use super::variant::ToVariant;
+        use windows::Win32::System::Variant::VARIANT;
 
         unsafe {
             let name_hstring = HSTRING::from(name);
-            let variant = value.to_variant();
+            // Use i32 conversion as per hv module
+            let variant = VARIANT::from(value as i32);
             self.Put(PCWSTR(name_hstring.as_ptr()), 0, &variant, 0)
                 .map_err(|e| Error::WmiMethod {
                     class: "IWbemClassObject",
@@ -464,26 +557,16 @@ impl WbemClassObjectExt for IWbemClassObject {
     }
 
     fn put_u64(&self, name: &str, value: u64) -> Result<()> {
-        use super::variant::ToVariant;
-
-        unsafe {
-            let name_hstring = HSTRING::from(name);
-            let variant = value.to_variant();
-            self.Put(PCWSTR(name_hstring.as_ptr()), 0, &variant, 0)
-                .map_err(|e| Error::WmiMethod {
-                    class: "IWbemClassObject",
-                    method: "Put",
-                    source: e,
-                })
-        }
+        // WMI expects uint64 as a string representation (BSTR)
+        self.put_string(name, &value.to_string())
     }
 
     fn put_bool(&self, name: &str, value: bool) -> Result<()> {
-        use super::variant::ToVariant;
+        use windows::Win32::System::Variant::VARIANT;
 
         unsafe {
             let name_hstring = HSTRING::from(name);
-            let variant = value.to_variant();
+            let variant = VARIANT::from(value);
             self.Put(PCWSTR(name_hstring.as_ptr()), 0, &variant, 0)
                 .map_err(|e| Error::WmiMethod {
                     class: "IWbemClassObject",
@@ -494,11 +577,47 @@ impl WbemClassObjectExt for IWbemClassObject {
     }
 
     fn put_string_array(&self, name: &str, values: &[&str]) -> Result<()> {
-        use super::variant::ToVariant;
+        use windows::Win32::System::Com::SAFEARRAYBOUND;
+        use windows::Win32::System::Ole::{SafeArrayCreate, SafeArrayDestroy, SafeArrayPutElement};
+        use windows::Win32::System::Variant::{VARIANT, VT_ARRAY, VT_BSTR};
 
         unsafe {
             let name_hstring = HSTRING::from(name);
-            let variant = values.to_variant();
+
+            // Create a SAFEARRAY of BSTRs
+            let bounds = SAFEARRAYBOUND {
+                cElements: values.len() as u32,
+                lLbound: 0,
+            };
+            let sa = SafeArrayCreate(VT_BSTR, 1, &bounds);
+            if sa.is_null() {
+                return Err(Error::OperationFailed {
+                    operation: "SafeArrayCreate",
+                    return_value: 0,
+                    message: "Failed to create SAFEARRAY".to_string(),
+                });
+            }
+
+            // Put each string into the array
+            for (i, value) in values.iter().enumerate() {
+                let bstr = BSTR::from(*value);
+                let index = i as i32;
+                let hr = SafeArrayPutElement(sa, &index, bstr.into_raw() as *const _);
+                if hr.is_err() {
+                    let _ = SafeArrayDestroy(sa);
+                    return Err(Error::OperationFailed {
+                        operation: "SafeArrayPutElement",
+                        return_value: 0,
+                        message: format!("Failed to put element {}", i),
+                    });
+                }
+            }
+
+            // Create variant containing the array (matching hv module approach)
+            let mut variant = VARIANT::default();
+            (*variant.Anonymous.Anonymous).vt = VT_ARRAY | VT_BSTR;
+            (*variant.Anonymous.Anonymous).Anonymous.parray = sa;
+
             self.Put(PCWSTR(name_hstring.as_ptr()), 0, &variant, 0)
                 .map_err(|e| Error::WmiMethod {
                     class: "IWbemClassObject",
@@ -509,13 +628,31 @@ impl WbemClassObjectExt for IWbemClassObject {
     }
 
     fn get_text(&self) -> Result<std::string::String> {
+        use windows::Win32::System::Com::{CoCreateInstance, CLSCTX_INPROC_SERVER};
+        use windows::Win32::System::Wmi::{
+            IWbemObjectTextSrc, WbemObjectTextSrc, WMI_OBJ_TEXT_WMI_DTD_2_0,
+        };
+
         unsafe {
-            let text = self.GetObjectText(0)
+            // Create the text source object
+            let text_src: IWbemObjectTextSrc =
+                CoCreateInstance(&WbemObjectTextSrc, None, CLSCTX_INPROC_SERVER).map_err(
+                    |e| Error::WmiMethod {
+                        class: "WbemObjectTextSrc",
+                        method: "CoCreateInstance",
+                        source: e,
+                    },
+                )?;
+
+            // Get text in WMI DTD 2.0 format (required for embedded instances in Hyper-V WMI)
+            let text = text_src
+                .GetText(0, self, WMI_OBJ_TEXT_WMI_DTD_2_0.0 as u32, None)
                 .map_err(|e| Error::WmiMethod {
-                    class: "IWbemClassObject",
-                    method: "GetObjectText",
+                    class: "IWbemObjectTextSrc",
+                    method: "GetText",
                     source: e,
                 })?;
+
             Ok(std::string::String::try_from(&text).unwrap_or_default())
         }
     }

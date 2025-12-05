@@ -73,9 +73,9 @@ pub use hyperv::HyperV;
 // VM types
 #[cfg(windows)]
 pub use vm::{
-    AutomaticStartAction, AutomaticStopAction, CheckpointType, Generation,
-    OperationalStatus, RequestedState, ShutdownType, VirtualMachine, VmSettings,
-    VmSettingsBuilder, VmState,
+    AutomaticStartAction, AutomaticStopAction, BlockSize, CheckpointType, DiskLocation, DiskSize,
+    Generation, MemoryBufferPercent, MemoryMB, OperationalStatus, ProcessorCount, RequestedState,
+    SectorSize, ShutdownType, StartupDelay, VirtualMachine, VmSettings, VmSettingsBuilder, VmState,
 };
 
 // Checkpoint types
@@ -85,8 +85,8 @@ pub use checkpoint::{Checkpoint, CheckpointSettings, CheckpointSettingsBuilder, 
 // Storage types
 #[cfg(windows)]
 pub use storage::{
-    ControllerType, DiskAttachment, IsoAttachment, StorageController,
-    Vhd, VhdFormat, VhdManager, VhdSettings, VhdSettingsBuilder, VhdType,
+    ControllerType, DiskAttachment, IsoAttachment, StorageController, Vhd, VhdFormat, VhdManager,
+    VhdSettings, VhdSettingsBuilder, VhdType,
 };
 
 // Network types

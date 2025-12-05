@@ -198,3 +198,114 @@ impl VirtualSwitchSettingsBuilder {
         Ok(settings)
     }
 }
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn test_switch_type_from_value() {
+        assert_eq!(SwitchType::from_value(0), SwitchType::Private);
+        assert_eq!(SwitchType::from_value(1), SwitchType::Internal);
+        assert_eq!(SwitchType::from_value(2), SwitchType::External);
+        assert_eq!(SwitchType::from_value(99), SwitchType::Private); // Default
+    }
+
+    #[test]
+    fn test_switch_type_to_value() {
+        assert_eq!(SwitchType::Private.to_value(), 0);
+        assert_eq!(SwitchType::Internal.to_value(), 1);
+        assert_eq!(SwitchType::External.to_value(), 2);
+    }
+
+    #[test]
+    fn test_switch_type_roundtrip() {
+        for st in [
+            SwitchType::Private,
+            SwitchType::Internal,
+            SwitchType::External,
+        ] {
+            assert_eq!(SwitchType::from_value(st.to_value()), st);
+        }
+    }
+
+    #[test]
+    fn test_switch_type_default() {
+        assert_eq!(SwitchType::default(), SwitchType::Private);
+    }
+
+    #[test]
+    fn test_switch_settings_builder_private() {
+        let result = VirtualSwitchSettings::builder()
+            .name("TestSwitch")
+            .switch_type(SwitchType::Private)
+            .build();
+        assert!(result.is_ok());
+        let settings = result.unwrap();
+        assert_eq!(settings.name, "TestSwitch");
+        assert_eq!(settings.switch_type, SwitchType::Private);
+    }
+
+    #[test]
+    fn test_switch_settings_builder_internal() {
+        let result = VirtualSwitchSettings::builder()
+            .name("InternalSwitch")
+            .switch_type(SwitchType::Internal)
+            .allow_management_os(true)
+            .build();
+        assert!(result.is_ok());
+        let settings = result.unwrap();
+        assert_eq!(settings.switch_type, SwitchType::Internal);
+        assert!(settings.allow_management_os);
+    }
+
+    #[test]
+    fn test_switch_settings_builder_external_with_adapter() {
+        let result = VirtualSwitchSettings::builder()
+            .name("ExternalSwitch")
+            .external_adapter("Ethernet")
+            .allow_management_os(true)
+            .build();
+        assert!(result.is_ok());
+        let settings = result.unwrap();
+        assert_eq!(settings.switch_type, SwitchType::External);
+        assert_eq!(settings.external_adapter, Some("Ethernet".to_string()));
+    }
+
+    #[test]
+    fn test_switch_settings_builder_external_without_adapter() {
+        let result = VirtualSwitchSettings::builder()
+            .name("ExternalSwitch")
+            .switch_type(SwitchType::External)
+            .build();
+        assert!(result.is_err());
+    }
+
+    #[test]
+    fn test_switch_settings_builder_missing_name() {
+        let result = VirtualSwitchSettings::builder()
+            .switch_type(SwitchType::Private)
+            .build();
+        assert!(result.is_err());
+    }
+
+    #[test]
+    fn test_switch_settings_validation_empty_name() {
+        let result = VirtualSwitchSettings::builder()
+            .name("")
+            .switch_type(SwitchType::Private)
+            .build();
+        assert!(result.is_err());
+    }
+
+    #[test]
+    fn test_switch_settings_with_notes() {
+        let result = VirtualSwitchSettings::builder()
+            .name("TestSwitch")
+            .notes("This is a test switch")
+            .build();
+        assert!(result.is_ok());
+        let settings = result.unwrap();
+        assert_eq!(settings.notes, Some("This is a test switch".to_string()));
+    }
+}

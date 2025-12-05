@@ -23,7 +23,11 @@
       "Bash(rustup target add:*)",
       "Bash(find:*)",
       "Bash(cp:*)",
-      "Bash(rustup target:*)"
+      "Bash(rustup target:*)",
+      "WebFetch(domain:blogs.msdn.microsoft.com)",
+      "Bash(cargo clean:*)",
+      "WebFetch(domain:stackoverflow.com)",
+      "Bash(grep:*)"
     ],
     "deny": [],
     "ask": []

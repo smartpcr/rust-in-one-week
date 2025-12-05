@@ -9,11 +9,7 @@ use windows_hyperv::{Generation, HyperV, Result, VmSettings};
 fn main() -> Result<()> {
     let args: Vec<String> = env::args().collect();
 
-    let vm_name = if args.len() > 1 {
-        &args[1]
-    } else {
-        "TestVM"
-    };
+    let vm_name = if args.len() > 1 { &args[1] } else { "TestVM" };
 
     println!("Connecting to Hyper-V...");
     let hyperv = HyperV::connect()?;

@@ -7,9 +7,11 @@ license = "MIT OR Apache-2.0"
 description = "Typed Hyper-V management API for Windows"
 
 [dependencies]
-windows-core = "0.61"
-windows-result = "0.3"
-windows = { version = "0.61", features = [
+thiserror = "2.0"
+
+[target.'cfg(windows)'.dependencies]
+# Match hv crate version for consistency
+windows = { version = "0.62.2", features = [
     "Win32_Foundation",
     "Win32_System_Wmi",
     "Win32_System_Com",
@@ -22,6 +24,7 @@ windows = { version = "0.61", features = [
 [features]
 default = ["std"]
 std = []
+integration = []
 
 [[example]]
 name = "list_vms"

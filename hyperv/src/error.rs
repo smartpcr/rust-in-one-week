@@ -1,3 +1,6 @@
+#[cfg(windows)]
+use windows::core::Error as WinError;
+
 use core::fmt;
 
 /// VM enabled state (copy for error module to avoid circular dependency).
@@ -34,19 +37,22 @@ impl fmt::Display for VmStateError {
 #[derive(Debug)]
 pub enum Error {
     /// Failed to connect to WMI.
-    WmiConnection(windows_core::Error),
+    #[cfg(windows)]
+    WmiConnection(WinError),
 
     /// Failed to execute WMI query.
+    #[cfg(windows)]
     WmiQuery {
         query: String,
-        source: windows_core::Error,
+        source: WinError,
     },
 
     /// Failed to invoke WMI method.
+    #[cfg(windows)]
     WmiMethod {
         class: &'static str,
         method: &'static str,
-        source: windows_core::Error,
+        source: WinError,
     },
 
     /// VM not found by name or ID.
@@ -117,10 +123,7 @@ impl fmt::Display for Error {
                 current,
                 operation,
             } => {
-                write!(
-                    f,
-                    "Cannot {operation} VM '{vm_name}' in state {current}"
-                )
+                write!(f, "Cannot {operation} VM '{vm_name}' in state {current}")
             }
             Error::Validation { field, message } => {
                 write!(f, "Validation failed for '{field}': {message}")
@@ -158,16 +161,20 @@ impl fmt::Display for Error {
 impl std::error::Error for Error {
     fn source(&self) -> Option<&(dyn std::error::Error + 'static)> {
         match self {
+            #[cfg(windows)]
             Error::WmiConnection(e) => Some(e),
+            #[cfg(windows)]
             Error::WmiQuery { source, .. } => Some(source),
+            #[cfg(windows)]
             Error::WmiMethod { source, .. } => Some(source),
             _ => None,
         }
     }
 }
 
-impl From<windows_core::Error> for Error {
-    fn from(e: windows_core::Error) -> Self {
+#[cfg(windows)]
+impl From<WinError> for Error {
+    fn from(e: WinError) -> Self {
         Error::WmiConnection(e)
     }
 }

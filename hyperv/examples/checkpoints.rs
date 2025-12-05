@@ -41,12 +41,7 @@ fn main() -> Result<()> {
                 println!("{}", "-".repeat(80));
 
                 for cp in checkpoints {
-                    println!(
-                        "{:<30} {:<25} {}",
-                        cp.name(),
-                        cp.creation_time,
-                        cp.id(),
-                    );
+                    println!("{:<30} {:<25} {}", cp.name(), cp.creation_time, cp.id(),);
                 }
             }
         }

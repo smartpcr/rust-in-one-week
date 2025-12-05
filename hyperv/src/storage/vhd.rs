@@ -300,10 +300,19 @@ impl VhdManager {
         let service_path = service.get_path()?;
 
         // Create VirtualHardDiskSettingData
-        let vhd_settings = self.connection.spawn_instance("Msvm_VirtualHardDiskSettingData")?;
+        let vhd_settings = self
+            .connection
+            .spawn_instance("Msvm_VirtualHardDiskSettingData")?;
         vhd_settings.put_string("Path", &settings.path)?;
         vhd_settings.put_u16("Type", settings.disk_type.to_wmi_value())?;
-        vhd_settings.put_u16("Format", if settings.format == VhdFormat::Vhdx { 3 } else { 2 })?;
+        vhd_settings.put_u16(
+            "Format",
+            if settings.format == VhdFormat::Vhdx {
+                3
+            } else {
+                2
+            },
+        )?;
         vhd_settings.put_u64("MaxInternalSize", settings.size_bytes)?;
 
         if let Some(block_size) = settings.block_size_bytes {
@@ -322,10 +331,9 @@ impl VhdManager {
         let settings_text = vhd_settings.get_text()?;
 
         // Call CreateVirtualHardDisk
-        let in_params = self.connection.get_method_params(
-            "Msvm_ImageManagementService",
-            "CreateVirtualHardDisk",
-        )?;
+        let in_params = self
+            .connection
+            .get_method_params("Msvm_ImageManagementService", "CreateVirtualHardDisk")?;
         in_params.put_string("VirtualDiskSettingData", &settings_text)?;
 
         let out_params = self.connection.exec_method(
@@ -379,10 +387,9 @@ impl VhdManager {
         let service = self.get_image_service()?;
         let service_path = service.get_path()?;
 
-        let in_params = self.connection.get_method_params(
-            "Msvm_ImageManagementService",
-            "ResizeVirtualHardDisk",
-        )?;
+        let in_params = self
+            .connection
+            .get_method_params("Msvm_ImageManagementService", "ResizeVirtualHardDisk")?;
         in_params.put_string("Path", path)?;
         in_params.put_u64("MaxInternalSize", new_size_bytes)?;
 
@@ -402,17 +409,25 @@ impl VhdManager {
         let service = self.get_image_service()?;
         let service_path = service.get_path()?;
 
-        let vhd_settings = self.connection.spawn_instance("Msvm_VirtualHardDiskSettingData")?;
+        let vhd_settings = self
+            .connection
+            .spawn_instance("Msvm_VirtualHardDiskSettingData")?;
         vhd_settings.put_string("Path", &dest_settings.path)?;
         vhd_settings.put_u16("Type", dest_settings.disk_type.to_wmi_value())?;
-        vhd_settings.put_u16("Format", if dest_settings.format == VhdFormat::Vhdx { 3 } else { 2 })?;
+        vhd_settings.put_u16(
+            "Format",
+            if dest_settings.format == VhdFormat::Vhdx {
+                3
+            } else {
+                2
+            },
+        )?;
 
         let settings_text = vhd_settings.get_text()?;
 
-        let in_params = self.connection.get_method_params(
-            "Msvm_ImageManagementService",
-            "ConvertVirtualHardDisk",
-        )?;
+        let in_params = self
+            .connection
+            .get_method_params("Msvm_ImageManagementService", "ConvertVirtualHardDisk")?;
         in_params.put_string("SourcePath", source_path)?;
         in_params.put_string("VirtualDiskSettingData", &settings_text)?;
 
@@ -432,10 +447,9 @@ impl VhdManager {
         let service = self.get_image_service()?;
         let service_path = service.get_path()?;
 
-        let in_params = self.connection.get_method_params(
-            "Msvm_ImageManagementService",
-            "CompactVirtualHardDisk",
-        )?;
+        let in_params = self
+            .connection
+            .get_method_params("Msvm_ImageManagementService", "CompactVirtualHardDisk")?;
         in_params.put_string("Path", path)?;
         in_params.put_u16("Mode", 0)?; // Full mode
 
@@ -453,17 +467,14 @@ impl VhdManager {
         let service = self.get_image_service()?;
         let service_path = service.get_path()?;
 
-        let in_params = self.connection.get_method_params(
-            "Msvm_ImageManagementService",
-            "MergeVirtualHardDisk",
-        )?;
+        let in_params = self
+            .connection
+            .get_method_params("Msvm_ImageManagementService", "MergeVirtualHardDisk")?;
         in_params.put_string("SourcePath", path)?;
 
-        let out_params = self.connection.exec_method(
-            &service_path,
-            "MergeVirtualHardDisk",
-            Some(&in_params),
-        )?;
+        let out_params =
+            self.connection
+                .exec_method(&service_path, "MergeVirtualHardDisk", Some(&in_params))?;
 
         self.handle_job_result(&out_params, "MergeVirtualHardDisk")
     }
@@ -473,7 +484,7 @@ impl VhdManager {
             .query_first("SELECT * FROM Msvm_ImageManagementService")?
             .ok_or_else(|| Error::WmiQuery {
                 query: "Msvm_ImageManagementService".to_string(),
-                source: windows_core::Error::from_hresult(windows_core::HRESULT(-1)),
+                source: windows::core::Error::from_hresult(windows::core::HRESULT(-1)),
             })
     }
 
@@ -523,5 +534,223 @@ impl VhdManager {
                 }
             }
         }
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn test_vhd_format_extension() {
+        assert_eq!(VhdFormat::Vhd.extension(), "vhd");
+        assert_eq!(VhdFormat::Vhdx.extension(), "vhdx");
+    }
+
+    #[test]
+    fn test_vhd_format_from_path() {
+        assert_eq!(VhdFormat::from_path("C:\\test.vhd"), VhdFormat::Vhd);
+        assert_eq!(VhdFormat::from_path("C:\\test.VHD"), VhdFormat::Vhd);
+        assert_eq!(VhdFormat::from_path("C:\\test.vhdx"), VhdFormat::Vhdx);
+        assert_eq!(VhdFormat::from_path("C:\\test.VHDX"), VhdFormat::Vhdx);
+        assert_eq!(VhdFormat::from_path("C:\\test.txt"), VhdFormat::Vhdx); // Default
+    }
+
+    #[test]
+    fn test_vhd_format_default() {
+        assert_eq!(VhdFormat::default(), VhdFormat::Vhdx);
+    }
+
+    #[test]
+    fn test_vhd_type_to_wmi_value() {
+        assert_eq!(VhdType::Fixed.to_wmi_value(), 2);
+        assert_eq!(VhdType::Dynamic.to_wmi_value(), 3);
+        assert_eq!(VhdType::Differencing.to_wmi_value(), 4);
+    }
+
+    #[test]
+    fn test_vhd_type_from_wmi_value() {
+        assert_eq!(VhdType::from_wmi_value(2), VhdType::Fixed);
+        assert_eq!(VhdType::from_wmi_value(3), VhdType::Dynamic);
+        assert_eq!(VhdType::from_wmi_value(4), VhdType::Differencing);
+        assert_eq!(VhdType::from_wmi_value(99), VhdType::Dynamic); // Default
+    }
+
+    #[test]
+    fn test_vhd_type_default() {
+        assert_eq!(VhdType::default(), VhdType::Dynamic);
+    }
+
+    #[test]
+    fn test_vhd_settings_builder_valid() {
+        let result = VhdSettings::builder()
+            .path("C:\\test.vhdx")
+            .size_gb(100)
+            .build();
+        assert!(result.is_ok());
+        let settings = result.unwrap();
+        assert_eq!(settings.path, "C:\\test.vhdx");
+        assert_eq!(settings.format, VhdFormat::Vhdx);
+        assert_eq!(settings.size_bytes, 100 * 1024 * 1024 * 1024);
+    }
+
+    #[test]
+    fn test_vhd_settings_builder_missing_path() {
+        let result = VhdSettings::builder().size_gb(100).build();
+        assert!(result.is_err());
+    }
+
+    #[test]
+    fn test_vhd_settings_validation_empty_path() {
+        let result = VhdSettings::builder().path("").size_gb(100).build();
+        assert!(result.is_err());
+    }
+
+    #[test]
+    fn test_vhd_settings_validation_wrong_extension_vhd() {
+        let result = VhdSettings::builder()
+            .path("C:\\test.vhdx")
+            .format(VhdFormat::Vhd)
+            .size_gb(100)
+            .build();
+        assert!(result.is_err());
+    }
+
+    #[test]
+    fn test_vhd_settings_validation_wrong_extension_vhdx() {
+        let result = VhdSettings::builder()
+            .path("C:\\test.vhd")
+            .format(VhdFormat::Vhdx)
+            .size_gb(100)
+            .build();
+        assert!(result.is_err());
+    }
+
+    #[test]
+    fn test_vhd_settings_validation_zero_size() {
+        let result = VhdSettings::builder()
+            .path("C:\\test.vhdx")
+            .size_bytes(0)
+            .build();
+        assert!(result.is_err());
+    }
+
+    #[test]
+    fn test_vhd_settings_validation_vhd_too_large() {
+        let result = VhdSettings::builder()
+            .path("C:\\test.vhd")
+            .format(VhdFormat::Vhd)
+            .size_bytes(3 * 1024 * 1024 * 1024 * 1024) // 3 TB > 2 TB limit
+            .build();
+        assert!(result.is_err());
+    }
+
+    #[test]
+    fn test_vhd_settings_validation_vhdx_too_large() {
+        let result = VhdSettings::builder()
+            .path("C:\\test.vhdx")
+            .format(VhdFormat::Vhdx)
+            .size_bytes(65 * 1024 * 1024 * 1024 * 1024) // 65 TB > 64 TB limit
+            .build();
+        assert!(result.is_err());
+    }
+
+    #[test]
+    fn test_vhd_settings_validation_differencing_no_parent() {
+        let result = VhdSettings::builder()
+            .path("C:\\test.vhdx")
+            .disk_type(VhdType::Differencing)
+            .build();
+        assert!(result.is_err());
+    }
+
+    #[test]
+    fn test_vhd_settings_validation_differencing_with_parent() {
+        let result = VhdSettings::builder()
+            .path("C:\\child.vhdx")
+            .parent_path("C:\\parent.vhdx")
+            .build();
+        assert!(result.is_ok());
+        let settings = result.unwrap();
+        assert_eq!(settings.disk_type, VhdType::Differencing);
+        assert_eq!(settings.parent_path, Some("C:\\parent.vhdx".to_string()));
+    }
+
+    #[test]
+    fn test_vhd_settings_validation_invalid_logical_sector() {
+        let result = VhdSettings::builder()
+            .path("C:\\test.vhdx")
+            .size_gb(100)
+            .logical_sector_size(1024) // Must be 512 or 4096
+            .build();
+        assert!(result.is_err());
+    }
+
+    #[test]
+    fn test_vhd_settings_validation_invalid_physical_sector() {
+        let result = VhdSettings::builder()
+            .path("C:\\test.vhdx")
+            .size_gb(100)
+            .physical_sector_size(2048) // Must be 512 or 4096
+            .build();
+        assert!(result.is_err());
+    }
+
+    #[test]
+    fn test_vhd_settings_validation_valid_sector_sizes() {
+        for logical in [512, 4096] {
+            for physical in [512, 4096] {
+                let result = VhdSettings::builder()
+                    .path("C:\\test.vhdx")
+                    .size_gb(100)
+                    .logical_sector_size(logical)
+                    .physical_sector_size(physical)
+                    .build();
+                assert!(
+                    result.is_ok(),
+                    "Should accept logical={}, physical={}",
+                    logical,
+                    physical
+                );
+            }
+        }
+    }
+
+    #[test]
+    fn test_vhd_settings_builder_auto_format() {
+        // Builder should auto-detect format from path
+        let vhd = VhdSettings::builder()
+            .path("C:\\test.vhd")
+            .size_gb(50)
+            .build()
+            .unwrap();
+        assert_eq!(vhd.format, VhdFormat::Vhd);
+
+        let vhdx = VhdSettings::builder()
+            .path("C:\\test.vhdx")
+            .size_gb(50)
+            .build()
+            .unwrap();
+        assert_eq!(vhdx.format, VhdFormat::Vhdx);
+    }
+
+    #[test]
+    fn test_vhd_settings_builder_all_options() {
+        let result = VhdSettings::builder()
+            .path("C:\\test.vhdx")
+            .format(VhdFormat::Vhdx)
+            .disk_type(VhdType::Fixed)
+            .size_gb(200)
+            .block_size_bytes(32 * 1024 * 1024)
+            .logical_sector_size(4096)
+            .physical_sector_size(4096)
+            .build();
+
+        assert!(result.is_ok());
+        let settings = result.unwrap();
+        assert_eq!(settings.disk_type, VhdType::Fixed);
+        assert_eq!(settings.block_size_bytes, Some(32 * 1024 * 1024));
+        assert_eq!(settings.logical_sector_size, Some(4096));
+        assert_eq!(settings.physical_sector_size, Some(4096));
     }
 }

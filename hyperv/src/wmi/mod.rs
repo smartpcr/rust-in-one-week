@@ -1,5 +1,5 @@
 mod connection;
 mod variant;
 
-pub use connection::{WmiConnection, WbemClassObjectExt};
+pub use connection::{WbemClassObjectExt, WmiConnection};
 pub use variant::FromVariant;

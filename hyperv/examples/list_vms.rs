@@ -17,7 +17,10 @@ fn main() -> Result<()> {
         return Ok(());
     }
 
-    println!("{:<30} {:<15} {:<12} {:>10} {:>6}", "NAME", "STATE", "GENERATION", "MEMORY", "CPUs");
+    println!(
+        "{:<30} {:<15} {:<12} {:>10} {:>6}",
+        "NAME", "STATE", "GENERATION", "MEMORY", "CPUs"
+    );
     println!("{}", "-".repeat(75));
 
     for vm in vms {

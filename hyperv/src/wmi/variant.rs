@@ -192,10 +192,7 @@ impl ToVariant for &str {
         let bstr = BSTR::from(*self);
         unsafe {
             let mut v = VARIANT::default();
-            ptr::write(
-                &mut (*v.Anonymous.Anonymous).vt,
-                VT_BSTR,
-            );
+            ptr::write(&mut (*v.Anonymous.Anonymous).vt, VT_BSTR);
             ptr::write(
                 &mut (*v.Anonymous.Anonymous).Anonymous.bstrVal,
                 std::mem::ManuallyDrop::new(bstr),
@@ -213,10 +210,11 @@ impl ToVariant for String {
 
 impl ToVariant for u16 {
     fn to_variant(&self) -> VARIANT {
+        // WMI often expects VT_I4 even for uint16 properties
         unsafe {
             let mut v = VARIANT::default();
-            ptr::write(&mut (*v.Anonymous.Anonymous).vt, VT_UI2);
-            ptr::write(&mut (*v.Anonymous.Anonymous).Anonymous.uiVal, *self);
+            ptr::write(&mut (*v.Anonymous.Anonymous).vt, VT_I4);
+            ptr::write(&mut (*v.Anonymous.Anonymous).Anonymous.lVal, *self as i32);
             v
         }
     }

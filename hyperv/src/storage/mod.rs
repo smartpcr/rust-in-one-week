@@ -1,5 +1,5 @@
-mod vhd;
 mod controller;
+mod vhd;
 
-pub use vhd::{Vhd, VhdType, VhdFormat, VhdSettings, VhdSettingsBuilder, VhdManager};
-pub use controller::{StorageController, ControllerType, DiskAttachment, IsoAttachment};
+pub use controller::{ControllerType, DiskAttachment, IsoAttachment, StorageController};
+pub use vhd::{Vhd, VhdFormat, VhdManager, VhdSettings, VhdSettingsBuilder, VhdType};

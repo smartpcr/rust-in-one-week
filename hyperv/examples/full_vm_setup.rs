@@ -7,8 +7,8 @@
 use std::env;
 use std::path::Path;
 use windows_hyperv::{
-    ControllerType, DiskAttachment, Generation, HyperV, IsoAttachment,
-    NetworkAdapterSettings, Result, VhdSettings, VmSettings,
+    ControllerType, DiskAttachment, Generation, HyperV, IsoAttachment, NetworkAdapterSettings,
+    Result, VhdSettings, VmSettings,
 };
 
 fn main() -> Result<()> {
@@ -26,7 +26,9 @@ fn main() -> Result<()> {
         println!("  - Network adapter connected to switch (if provided)");
         println!();
         println!("Example:");
-        println!("  full_vm_setup MyVM C:\\VMs\\MyVM\\disk.vhdx C:\\ISOs\\win11.iso \"Default Switch\"");
+        println!(
+            "  full_vm_setup MyVM C:\\VMs\\MyVM\\disk.vhdx C:\\ISOs\\win11.iso \"Default Switch\""
+        );
         return Ok(());
     }
 
@@ -76,10 +78,7 @@ fn main() -> Result<()> {
     println!("\n[2/5] Setting up storage...");
     if !Path::new(vhd_path).exists() {
         println!("       Creating new 100 GB VHDX...");
-        let vhd_settings = VhdSettings::builder()
-            .path(vhd_path)
-            .size_gb(100)
-            .build()?;
+        let vhd_settings = VhdSettings::builder().path(vhd_path).size_gb(100).build()?;
 
         hyperv.vhd().create(&vhd_settings)?;
         println!("       VHD created: {}", vhd_path);

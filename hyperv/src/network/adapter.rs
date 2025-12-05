@@ -28,7 +28,10 @@ impl NetworkAdapter {
         let name = obj.get_string_prop("ElementName")?.unwrap_or_default();
         let path = obj.get_path()?;
         let mac_address = obj.get_string_prop("Address")?;
-        let dynamic_mac = obj.get_bool("StaticMacAddress")?.map(|s| !s).unwrap_or(true);
+        let dynamic_mac = obj
+            .get_bool("StaticMacAddress")?
+            .map(|s| !s)
+            .unwrap_or(true);
 
         Ok(Self {
             instance_id,
@@ -286,5 +289,200 @@ impl BandwidthSettings {
     pub fn burst_mb(mut self, mb: u64) -> Self {
         self.burst_mb = Some(mb);
         self
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn test_network_adapter_settings_default() {
+        let settings = NetworkAdapterSettings::default();
+        assert!(settings.dynamic_mac);
+        assert!(settings.mac_address.is_none());
+        assert!(!settings.mac_spoofing);
+        assert!(!settings.dhcp_guard);
+        assert_eq!(settings.port_mirroring, PortMirroringMode::None);
+    }
+
+    #[test]
+    fn test_network_adapter_settings_builder_default() {
+        let result = NetworkAdapterSettings::builder().build();
+        assert!(result.is_ok());
+    }
+
+    #[test]
+    fn test_network_adapter_settings_builder_with_name() {
+        let result = NetworkAdapterSettings::builder()
+            .name("TestAdapter")
+            .build();
+        assert!(result.is_ok());
+        let settings = result.unwrap();
+        assert_eq!(settings.name, Some("TestAdapter".to_string()));
+    }
+
+    #[test]
+    fn test_network_adapter_settings_builder_with_switch() {
+        let result = NetworkAdapterSettings::builder()
+            .switch("Default Switch")
+            .build();
+        assert!(result.is_ok());
+        let settings = result.unwrap();
+        assert_eq!(settings.switch_name, Some("Default Switch".to_string()));
+    }
+
+    #[test]
+    fn test_network_adapter_settings_valid_mac_colon() {
+        let result = NetworkAdapterSettings::builder()
+            .mac_address("00:15:5D:01:02:03")
+            .build();
+        assert!(result.is_ok());
+        let settings = result.unwrap();
+        assert!(!settings.dynamic_mac);
+        assert_eq!(settings.mac_address, Some("00:15:5D:01:02:03".to_string()));
+    }
+
+    #[test]
+    fn test_network_adapter_settings_valid_mac_dash() {
+        let result = NetworkAdapterSettings::builder()
+            .mac_address("00-15-5D-01-02-03")
+            .build();
+        assert!(result.is_ok());
+    }
+
+    #[test]
+    fn test_network_adapter_settings_invalid_mac_short() {
+        let result = NetworkAdapterSettings::builder()
+            .mac_address("00:15:5D")
+            .build();
+        assert!(result.is_err());
+    }
+
+    #[test]
+    fn test_network_adapter_settings_invalid_mac_characters() {
+        let result = NetworkAdapterSettings::builder()
+            .mac_address("00:15:5D:01:02:GG")
+            .build();
+        assert!(result.is_err());
+    }
+
+    #[test]
+    fn test_network_adapter_settings_valid_vlan() {
+        let result = NetworkAdapterSettings::builder().vlan_id(100).build();
+        assert!(result.is_ok());
+        let settings = result.unwrap();
+        assert_eq!(settings.vlan_id, Some(100));
+    }
+
+    #[test]
+    fn test_network_adapter_settings_invalid_vlan() {
+        let result = NetworkAdapterSettings::builder()
+            .vlan_id(4095) // Must be 0-4094
+            .build();
+        assert!(result.is_err());
+    }
+
+    #[test]
+    fn test_network_adapter_settings_max_vlan() {
+        let result = NetworkAdapterSettings::builder().vlan_id(4094).build();
+        assert!(result.is_ok());
+    }
+
+    #[test]
+    fn test_network_adapter_settings_security_options() {
+        let result = NetworkAdapterSettings::builder()
+            .mac_spoofing(true)
+            .dhcp_guard(true)
+            .router_guard(true)
+            .build();
+        assert!(result.is_ok());
+        let settings = result.unwrap();
+        assert!(settings.mac_spoofing);
+        assert!(settings.dhcp_guard);
+        assert!(settings.router_guard);
+    }
+
+    #[test]
+    fn test_port_mirroring_mode_to_value() {
+        assert_eq!(PortMirroringMode::None.to_value(), 0);
+        assert_eq!(PortMirroringMode::Source.to_value(), 1);
+        assert_eq!(PortMirroringMode::Destination.to_value(), 2);
+    }
+
+    #[test]
+    fn test_port_mirroring_default() {
+        assert_eq!(PortMirroringMode::default(), PortMirroringMode::None);
+    }
+
+    #[test]
+    fn test_network_adapter_settings_with_port_mirroring() {
+        let result = NetworkAdapterSettings::builder()
+            .port_mirroring(PortMirroringMode::Source)
+            .build();
+        assert!(result.is_ok());
+        let settings = result.unwrap();
+        assert_eq!(settings.port_mirroring, PortMirroringMode::Source);
+    }
+
+    #[test]
+    fn test_bandwidth_settings_builder() {
+        let bw = BandwidthSettings::new()
+            .minimum_mbps(100)
+            .maximum_mbps(1000)
+            .burst_mb(10);
+        assert_eq!(bw.minimum_mbps, Some(100));
+        assert_eq!(bw.maximum_mbps, Some(1000));
+        assert_eq!(bw.burst_mb, Some(10));
+    }
+
+    #[test]
+    fn test_network_adapter_settings_with_bandwidth() {
+        let bw = BandwidthSettings::new().minimum_mbps(50).maximum_mbps(500);
+        let result = NetworkAdapterSettings::builder().bandwidth(bw).build();
+        assert!(result.is_ok());
+        let settings = result.unwrap();
+        assert!(settings.bandwidth.is_some());
+        let bw = settings.bandwidth.unwrap();
+        assert_eq!(bw.minimum_mbps, Some(50));
+        assert_eq!(bw.maximum_mbps, Some(500));
+    }
+
+    #[test]
+    fn test_network_adapter_settings_all_options() {
+        let bw = BandwidthSettings::new()
+            .minimum_mbps(100)
+            .maximum_mbps(1000);
+        let result = NetworkAdapterSettings::builder()
+            .name("FullAdapter")
+            .switch("ExternalSwitch")
+            .mac_address("00:15:5D:AA:BB:CC")
+            .vlan_id(200)
+            .mac_spoofing(true)
+            .dhcp_guard(true)
+            .router_guard(true)
+            .port_mirroring(PortMirroringMode::Destination)
+            .bandwidth(bw)
+            .build();
+
+        assert!(result.is_ok());
+        let settings = result.unwrap();
+        assert_eq!(settings.name, Some("FullAdapter".to_string()));
+        assert_eq!(settings.switch_name, Some("ExternalSwitch".to_string()));
+        assert!(!settings.dynamic_mac);
+        assert_eq!(settings.vlan_id, Some(200));
+        assert_eq!(settings.port_mirroring, PortMirroringMode::Destination);
+    }
+
+    #[test]
+    fn test_dynamic_mac_clears_static() {
+        let result = NetworkAdapterSettings::builder()
+            .mac_address("00:15:5D:01:02:03")
+            .dynamic_mac(true)
+            .build();
+        assert!(result.is_ok());
+        let settings = result.unwrap();
+        assert!(settings.dynamic_mac);
+        assert!(settings.mac_address.is_none());
     }
 }

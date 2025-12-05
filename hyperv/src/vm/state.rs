@@ -62,7 +62,10 @@ impl VmState {
 
     /// Check if VM can be stopped.
     pub fn can_stop(&self) -> bool {
-        matches!(self, VmState::Running | VmState::Paused | VmState::Suspended)
+        matches!(
+            self,
+            VmState::Running | VmState::Paused | VmState::Suspended
+        )
     }
 
     /// Check if VM can be paused.
@@ -300,6 +303,109 @@ impl AutomaticStartAction {
     }
 }
 
+/// Startup delay for automatic VM start.
+///
+/// Represents a time interval for delaying VM startup after host boot.
+/// Maximum delay is 24 hours (86400 seconds).
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Default)]
+pub struct StartupDelay(u32);
+
+impl StartupDelay {
+    /// Maximum delay in seconds (24 hours).
+    pub const MAX_SECONDS: u32 = 86400;
+
+    /// Create a new startup delay from seconds.
+    ///
+    /// Returns `None` if the delay exceeds 24 hours.
+    pub fn from_secs(seconds: u32) -> Option<Self> {
+        if seconds <= Self::MAX_SECONDS {
+            Some(Self(seconds))
+        } else {
+            None
+        }
+    }
+
+    /// Create a startup delay from minutes.
+    ///
+    /// Returns `None` if the delay exceeds 24 hours.
+    pub fn from_mins(minutes: u32) -> Option<Self> {
+        Self::from_secs(minutes.saturating_mul(60))
+    }
+
+    /// Create a startup delay from hours.
+    ///
+    /// Returns `None` if the delay exceeds 24 hours.
+    pub fn from_hours(hours: u32) -> Option<Self> {
+        Self::from_secs(hours.saturating_mul(3600))
+    }
+
+    /// No delay (immediate start).
+    pub const fn none() -> Self {
+        Self(0)
+    }
+
+    /// Get the delay in seconds.
+    pub fn as_secs(&self) -> u32 {
+        self.0
+    }
+
+    /// Check if there is no delay.
+    pub fn is_none(&self) -> bool {
+        self.0 == 0
+    }
+
+    /// Convert to CIM datetime interval format.
+    ///
+    /// CIM datetime interval format: `DDDDDDDDHHMMSS.MMMMMM:000`
+    /// where D=days, H=hours, M=minutes, S=seconds, M=microseconds.
+    pub fn to_cim_interval(&self) -> String {
+        if self.0 == 0 {
+            return String::new();
+        }
+        let hours = self.0 / 3600;
+        let minutes = (self.0 % 3600) / 60;
+        let seconds = self.0 % 60;
+        format!(
+            "00000000{:02}{:02}{:02}.000000:000",
+            hours, minutes, seconds
+        )
+    }
+
+    /// Parse from CIM datetime interval format.
+    pub fn from_cim_interval(s: &str) -> Option<Self> {
+        if s.is_empty() {
+            return Some(Self(0));
+        }
+        // Format: DDDDDDDDHHMMSS.MMMMMM:000
+        if s.len() < 14 {
+            return None;
+        }
+        let hours: u32 = s.get(8..10)?.parse().ok()?;
+        let minutes: u32 = s.get(10..12)?.parse().ok()?;
+        let seconds: u32 = s.get(12..14)?.parse().ok()?;
+        Self::from_secs(hours * 3600 + minutes * 60 + seconds)
+    }
+}
+
+impl fmt::Display for StartupDelay {
+    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+        if self.0 == 0 {
+            write!(f, "no delay")
+        } else if self.0 < 60 {
+            write!(f, "{} seconds", self.0)
+        } else if self.0 < 3600 {
+            write!(f, "{} minutes", self.0 / 60)
+        } else {
+            write!(
+                f,
+                "{} hours {} minutes",
+                self.0 / 3600,
+                (self.0 % 3600) / 60
+            )
+        }
+    }
+}
+
 use crate::error::VmStateError;
 
 impl VmState {
@@ -347,5 +453,232 @@ impl AutomaticStopAction {
             2 => AutomaticStopAction::Shutdown,
             _ => AutomaticStopAction::Save,
         }
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn test_vm_state_from_enabled_state() {
+        assert_eq!(VmState::from_enabled_state(2), VmState::Running);
+        assert_eq!(VmState::from_enabled_state(3), VmState::Off);
+        assert_eq!(VmState::from_enabled_state(32768), VmState::Paused);
+        assert_eq!(VmState::from_enabled_state(32769), VmState::Suspended);
+        assert_eq!(VmState::from_enabled_state(999), VmState::Unknown);
+    }
+
+    #[test]
+    fn test_vm_state_can_start() {
+        assert!(VmState::Off.can_start());
+        assert!(VmState::Suspended.can_start());
+        assert!(VmState::Paused.can_start());
+        assert!(!VmState::Running.can_start());
+        assert!(!VmState::Starting.can_start());
+    }
+
+    #[test]
+    fn test_vm_state_can_stop() {
+        assert!(VmState::Running.can_stop());
+        assert!(VmState::Paused.can_stop());
+        assert!(VmState::Suspended.can_stop());
+        assert!(!VmState::Off.can_stop());
+        assert!(!VmState::Stopping.can_stop());
+    }
+
+    #[test]
+    fn test_vm_state_can_pause() {
+        assert!(VmState::Running.can_pause());
+        assert!(!VmState::Off.can_pause());
+        assert!(!VmState::Paused.can_pause());
+    }
+
+    #[test]
+    fn test_vm_state_can_save() {
+        assert!(VmState::Running.can_save());
+        assert!(VmState::Paused.can_save());
+        assert!(!VmState::Off.can_save());
+        assert!(!VmState::Suspended.can_save());
+    }
+
+    #[test]
+    fn test_vm_state_is_transitional() {
+        assert!(VmState::Starting.is_transitional());
+        assert!(VmState::Stopping.is_transitional());
+        assert!(VmState::Saving.is_transitional());
+        assert!(VmState::Pausing.is_transitional());
+        assert!(VmState::Resuming.is_transitional());
+        assert!(VmState::ShuttingDown.is_transitional());
+        assert!(VmState::Snapshotting.is_transitional());
+        assert!(!VmState::Running.is_transitional());
+        assert!(!VmState::Off.is_transitional());
+    }
+
+    #[test]
+    fn test_vm_state_display() {
+        assert_eq!(format!("{}", VmState::Running), "Running");
+        assert_eq!(format!("{}", VmState::Off), "Off");
+        assert_eq!(format!("{}", VmState::Suspended), "Saved");
+        assert_eq!(format!("{}", VmState::ShuttingDown), "Shutting Down");
+    }
+
+    #[test]
+    fn test_generation_to_subtype() {
+        assert_eq!(Generation::Gen1.to_subtype(), "Microsoft:Hyper-V:SubType:1");
+        assert_eq!(Generation::Gen2.to_subtype(), "Microsoft:Hyper-V:SubType:2");
+    }
+
+    #[test]
+    fn test_generation_from_subtype() {
+        assert_eq!(
+            Generation::from_subtype("Microsoft:Hyper-V:SubType:1"),
+            Generation::Gen1
+        );
+        assert_eq!(
+            Generation::from_subtype("Microsoft:Hyper-V:SubType:2"),
+            Generation::Gen2
+        );
+        assert_eq!(Generation::from_subtype("unknown"), Generation::Gen1);
+    }
+
+    #[test]
+    fn test_generation_display() {
+        assert_eq!(format!("{}", Generation::Gen1), "Generation 1");
+        assert_eq!(format!("{}", Generation::Gen2), "Generation 2");
+    }
+
+    #[test]
+    fn test_generation_default() {
+        assert_eq!(Generation::default(), Generation::Gen1);
+    }
+
+    #[test]
+    fn test_checkpoint_type_roundtrip() {
+        for ct in [
+            CheckpointType::Disabled,
+            CheckpointType::Production,
+            CheckpointType::ProductionOnly,
+            CheckpointType::Standard,
+        ] {
+            assert_eq!(CheckpointType::from_value(ct.to_value()), ct);
+        }
+    }
+
+    #[test]
+    fn test_automatic_start_action_roundtrip() {
+        for action in [
+            AutomaticStartAction::Nothing,
+            AutomaticStartAction::StartIfRunning,
+            AutomaticStartAction::AlwaysStart,
+        ] {
+            assert_eq!(AutomaticStartAction::from_value(action.to_value()), action);
+        }
+    }
+
+    #[test]
+    fn test_automatic_stop_action_roundtrip() {
+        for action in [
+            AutomaticStopAction::TurnOff,
+            AutomaticStopAction::Save,
+            AutomaticStopAction::Shutdown,
+        ] {
+            assert_eq!(AutomaticStopAction::from_value(action.to_value()), action);
+        }
+    }
+
+    #[test]
+    fn test_operational_status_from_value() {
+        assert_eq!(OperationalStatus::from_value(2), OperationalStatus::Ok);
+        assert_eq!(OperationalStatus::from_value(6), OperationalStatus::Error);
+        assert_eq!(
+            OperationalStatus::from_value(999),
+            OperationalStatus::Unknown
+        );
+    }
+
+    #[test]
+    fn test_startup_delay_from_secs() {
+        assert_eq!(StartupDelay::from_secs(0), Some(StartupDelay::none()));
+        assert_eq!(StartupDelay::from_secs(30).unwrap().as_secs(), 30);
+        assert_eq!(StartupDelay::from_secs(3600).unwrap().as_secs(), 3600);
+        assert_eq!(StartupDelay::from_secs(86400).unwrap().as_secs(), 86400);
+        assert!(StartupDelay::from_secs(86401).is_none()); // Exceeds 24 hours
+    }
+
+    #[test]
+    fn test_startup_delay_from_mins() {
+        assert_eq!(StartupDelay::from_mins(5).unwrap().as_secs(), 300);
+        assert_eq!(StartupDelay::from_mins(60).unwrap().as_secs(), 3600);
+        assert!(StartupDelay::from_mins(1441).is_none()); // Exceeds 24 hours
+    }
+
+    #[test]
+    fn test_startup_delay_from_hours() {
+        assert_eq!(StartupDelay::from_hours(1).unwrap().as_secs(), 3600);
+        assert_eq!(StartupDelay::from_hours(24).unwrap().as_secs(), 86400);
+        assert!(StartupDelay::from_hours(25).is_none()); // Exceeds 24 hours
+    }
+
+    #[test]
+    fn test_startup_delay_is_none() {
+        assert!(StartupDelay::none().is_none());
+        assert!(StartupDelay::from_secs(0).unwrap().is_none());
+        assert!(!StartupDelay::from_secs(1).unwrap().is_none());
+    }
+
+    #[test]
+    fn test_startup_delay_to_cim_interval() {
+        assert_eq!(StartupDelay::none().to_cim_interval(), "");
+        assert_eq!(
+            StartupDelay::from_secs(30).unwrap().to_cim_interval(),
+            "00000000000030.000000:000"
+        );
+        assert_eq!(
+            StartupDelay::from_secs(90).unwrap().to_cim_interval(),
+            "00000000000130.000000:000"
+        );
+        assert_eq!(
+            StartupDelay::from_secs(3661).unwrap().to_cim_interval(),
+            "00000000010101.000000:000"
+        );
+    }
+
+    #[test]
+    fn test_startup_delay_from_cim_interval() {
+        assert_eq!(
+            StartupDelay::from_cim_interval(""),
+            Some(StartupDelay::none())
+        );
+        assert_eq!(
+            StartupDelay::from_cim_interval("00000000000030.000000:000"),
+            Some(StartupDelay::from_secs(30).unwrap())
+        );
+        assert_eq!(
+            StartupDelay::from_cim_interval("00000000010101.000000:000"),
+            Some(StartupDelay::from_secs(3661).unwrap())
+        );
+    }
+
+    #[test]
+    fn test_startup_delay_display() {
+        assert_eq!(format!("{}", StartupDelay::none()), "no delay");
+        assert_eq!(
+            format!("{}", StartupDelay::from_secs(30).unwrap()),
+            "30 seconds"
+        );
+        assert_eq!(
+            format!("{}", StartupDelay::from_secs(120).unwrap()),
+            "2 minutes"
+        );
+        assert_eq!(
+            format!("{}", StartupDelay::from_secs(3660).unwrap()),
+            "1 hours 1 minutes"
+        );
+    }
+
+    #[test]
+    fn test_startup_delay_default() {
+        assert_eq!(StartupDelay::default(), StartupDelay::none());
     }
 }

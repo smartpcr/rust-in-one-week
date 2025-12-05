@@ -1,5 +1,5 @@
 use crate::error::{Error, Result};
-use crate::vm::{Generation, VmState, RequestedState, ShutdownType};
+use crate::vm::{Generation, RequestedState, ShutdownType, VmState};
 use crate::wmi::{WbemClassObjectExt, WmiConnection};
 use windows::Win32::System::Wmi::IWbemClassObject;
 
@@ -62,6 +62,11 @@ impl VirtualMachine {
     /// Get VM generation.
     pub fn generation(&self) -> Generation {
         self.generation
+    }
+
+    /// Get WMI object path.
+    pub fn path(&self) -> &str {
+        &self.path
     }
 
     /// Refresh state from WMI.
@@ -169,7 +174,9 @@ impl VirtualMachine {
              WHERE AssocClass=Msvm_SettingsDefineState ResultClass=Msvm_VirtualSystemSettingData",
             self.id
         );
-        let settings = self.connection.query_first(&query)?
+        let settings = self
+            .connection
+            .query_first(&query)?
             .ok_or_else(|| Error::VmNotFound(self.name.clone()))?;
 
         let settings_path = settings.get_path()?;
@@ -177,13 +184,17 @@ impl VirtualMachine {
             "ASSOCIATORS OF {{{}}} WHERE ResultClass=Msvm_MemorySettingData",
             settings_path
         );
-        let mem_settings = self.connection.query_first(&mem_query)?
+        let mem_settings = self
+            .connection
+            .query_first(&mem_query)?
             .ok_or_else(|| Error::VmNotFound(self.name.clone()))?;
 
-        mem_settings.get_u64("VirtualQuantity")?.ok_or_else(|| Error::TypeConversion {
-            property: "VirtualQuantity",
-            expected: "u64",
-        })
+        mem_settings
+            .get_u64("VirtualQuantity")?
+            .ok_or_else(|| Error::TypeConversion {
+                property: "VirtualQuantity",
+                expected: "u64",
+            })
     }
 
     /// Get processor count.
@@ -193,7 +204,9 @@ impl VirtualMachine {
              WHERE AssocClass=Msvm_SettingsDefineState ResultClass=Msvm_VirtualSystemSettingData",
             self.id
         );
-        let settings = self.connection.query_first(&query)?
+        let settings = self
+            .connection
+            .query_first(&query)?
             .ok_or_else(|| Error::VmNotFound(self.name.clone()))?;
 
         let settings_path = settings.get_path()?;
@@ -201,28 +214,37 @@ impl VirtualMachine {
             "ASSOCIATORS OF {{{}}} WHERE ResultClass=Msvm_ProcessorSettingData",
             settings_path
         );
-        let proc_settings = self.connection.query_first(&proc_query)?
+        let proc_settings = self
+            .connection
+            .query_first(&proc_query)?
             .ok_or_else(|| Error::VmNotFound(self.name.clone()))?;
 
-        proc_settings.get_u32("VirtualQuantity")?.ok_or_else(|| Error::TypeConversion {
-            property: "VirtualQuantity",
-            expected: "u32",
-        })
+        proc_settings
+            .get_u32("VirtualQuantity")?
+            .ok_or_else(|| Error::TypeConversion {
+                property: "VirtualQuantity",
+                expected: "u32",
+            })
     }
 
     /// Request state change via WMI.
     fn request_state_change(&self, requested: RequestedState) -> Result<()> {
-        let in_params = self.connection.get_method_params("Msvm_ComputerSystem", "RequestStateChange")?;
+        let in_params = self
+            .connection
+            .get_method_params("Msvm_ComputerSystem", "RequestStateChange")?;
         in_params.put_u16("RequestedState", requested as u16)?;
 
-        let out_params = self.connection.exec_method(&self.path, "RequestStateChange", Some(&in_params))?;
+        let out_params =
+            self.connection
+                .exec_method(&self.path, "RequestStateChange", Some(&in_params))?;
         let return_value = out_params.get_u32("ReturnValue")?.unwrap_or(0);
 
         match return_value {
             0 => Ok(()), // Completed
             4096 => {
                 // Job started - wait for completion
-                let job_path: std::string::String = out_params.get_string_prop("Job")
+                let job_path: std::string::String = out_params
+                    .get_string_prop("Job")
                     .ok()
                     .flatten()
                     .unwrap_or_default();
@@ -247,19 +269,25 @@ impl VirtualMachine {
             "SELECT * FROM Msvm_ShutdownComponent WHERE SystemName='{}'",
             self.id
         );
-        let shutdown_component = self.connection.query_first(&query)?
-            .ok_or_else(|| Error::OperationFailed {
-                operation: "GracefulShutdown",
-                return_value: 0,
-                message: "Shutdown integration service not available".to_string(),
-            })?;
+        let shutdown_component =
+            self.connection
+                .query_first(&query)?
+                .ok_or_else(|| Error::OperationFailed {
+                    operation: "GracefulShutdown",
+                    return_value: 0,
+                    message: "Shutdown integration service not available".to_string(),
+                })?;
 
         let component_path = shutdown_component.get_path()?;
-        let in_params = self.connection.get_method_params("Msvm_ShutdownComponent", "InitiateShutdown")?;
+        let in_params = self
+            .connection
+            .get_method_params("Msvm_ShutdownComponent", "InitiateShutdown")?;
         in_params.put_bool("Force", false)?;
         in_params.put_string("Reason", "User requested shutdown")?;
 
-        let out_params = self.connection.exec_method(&component_path, "InitiateShutdown", Some(&in_params))?;
+        let out_params =
+            self.connection
+                .exec_method(&component_path, "InitiateShutdown", Some(&in_params))?;
         let return_value = out_params.get_u32("ReturnValue")?.unwrap_or(0);
 
         if return_value == 0 {
@@ -310,7 +338,8 @@ impl VirtualMachine {
             vm_id
         );
         if let Some(settings) = connection.query_first(&query)? {
-            let subtype: std::string::String = settings.get_string_prop("VirtualSystemSubType")
+            let subtype: std::string::String = settings
+                .get_string_prop("VirtualSystemSubType")
                 .ok()
                 .flatten()
                 .unwrap_or_default();

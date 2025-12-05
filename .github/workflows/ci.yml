@@ -169,6 +169,10 @@ jobs:
         run: cargo test -p hv --features integration --verbose
         continue-on-error: true
 
+      - name: Run hyperv integration tests (Hyper-V required)
+        run: cargo test -p windows-hyperv --features integration --verbose
+        continue-on-error: true
+
       - name: Run clus integration tests (cluster required)
         run: cargo test -p clus --features integration --verbose
         continue-on-error: true
