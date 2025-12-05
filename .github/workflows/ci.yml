@@ -176,8 +176,8 @@ jobs:
           }
         continue-on-error: true
 
-      - name: Build workspace
-        run: cargo build --workspace --verbose -j 1
+      - name: Build workspace (skip examples)
+        run: cargo build --workspace --lib --bins --verbose
 
       - name: Run unit tests
         run: cargo test --workspace --verbose
