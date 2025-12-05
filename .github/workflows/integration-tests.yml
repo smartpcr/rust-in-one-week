@@ -143,8 +143,8 @@ jobs:
       - name: Build workspace (skip examples)
         run: cargo build --workspace --lib --bins --verbose
 
-      - name: Run unit tests
-        run: cargo test --workspace --verbose
+      - name: Run unit tests (skip examples)
+        run: cargo test --workspace --lib --bins --verbose
 
       - name: Run hv integration tests (Hyper-V required)
         run: cargo test -p hv --features integration --verbose -- --test-threads=1

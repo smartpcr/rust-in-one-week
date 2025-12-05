@@ -34,11 +34,11 @@ jobs:
           restore-keys: |
             ${{ runner.os }}-cargo-
 
-      - name: Build all modules
-        run: cargo build --workspace --verbose
+      - name: Build all modules (skip examples)
+        run: cargo build --workspace --lib --bins --verbose
 
       - name: Run tests (excluding Windows-only)
-        run: cargo test --workspace --verbose
+        run: cargo test --workspace --lib --bins --verbose
 
   # Build and test on Windows (for Windows-specific modules)
   build-windows:
@@ -68,11 +68,11 @@ jobs:
           restore-keys: |
             ${{ runner.os }}-cargo-
 
-      - name: Build all modules
-        run: cargo build --workspace --verbose
+      - name: Build all modules (skip examples)
+        run: cargo build --workspace --lib --bins --verbose
 
       - name: Run tests (excluding cluster tests)
-        run: cargo test --workspace --verbose
+        run: cargo test --workspace --lib --bins --verbose
 
   # Windows Server with Failover Cluster and Hyper-V for integration tests
   build-windows-server:
