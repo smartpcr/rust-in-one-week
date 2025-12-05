@@ -231,7 +231,10 @@ impl WmiConnection {
         Err(Error::OperationFailed {
             operation: "GetDefaultResource",
             return_value: 0,
-            message: format!("Default settings not found for resource: {}", resource_subtype),
+            message: format!(
+                "Default settings not found for resource: {}",
+                resource_subtype
+            ),
         })
     }
 
@@ -636,13 +639,13 @@ impl WbemClassObjectExt for IWbemClassObject {
         unsafe {
             // Create the text source object
             let text_src: IWbemObjectTextSrc =
-                CoCreateInstance(&WbemObjectTextSrc, None, CLSCTX_INPROC_SERVER).map_err(
-                    |e| Error::WmiMethod {
+                CoCreateInstance(&WbemObjectTextSrc, None, CLSCTX_INPROC_SERVER).map_err(|e| {
+                    Error::WmiMethod {
                         class: "WbemObjectTextSrc",
                         method: "CoCreateInstance",
                         source: e,
-                    },
-                )?;
+                    }
+                })?;
 
             // Get text in WMI DTD 2.0 format (required for embedded instances in Hyper-V WMI)
             let text = text_src

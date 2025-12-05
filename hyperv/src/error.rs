@@ -42,10 +42,7 @@ pub enum Error {
 
     /// Failed to execute WMI query.
     #[cfg(windows)]
-    WmiQuery {
-        query: String,
-        source: WinError,
-    },
+    WmiQuery { query: String, source: WinError },
 
     /// Failed to invoke WMI method.
     #[cfg(windows)]

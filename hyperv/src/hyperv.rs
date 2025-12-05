@@ -561,7 +561,8 @@ impl HyperV {
                         for obj in &results {
                             if let Ok(path) = obj.get_path() {
                                 // Check if this is a snapshot (VirtualSystemType contains "Snapshot")
-                                if let Ok(Some(vs_type)) = obj.get_string_prop("VirtualSystemType") {
+                                if let Ok(Some(vs_type)) = obj.get_string_prop("VirtualSystemType")
+                                {
                                     if vs_type.contains("Snapshot") {
                                         return Ok(Some(path));
                                     }

@@ -46,9 +46,6 @@
 //! - Hyper-V feature enabled
 //! - Administrator privileges
 
-#[cfg(not(windows))]
-compile_error!("windows-hyperv only supports Windows platforms");
-
 #[cfg(windows)]
 pub mod checkpoint;
 #[cfg(windows)]
