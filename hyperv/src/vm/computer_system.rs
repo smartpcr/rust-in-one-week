@@ -1,6 +1,10 @@
 use crate::error::{Error, Result};
-use crate::vm::{Generation, RequestedState, ShutdownType, VmState};
+use crate::vm::{
+    ExportSettings, Generation, ImportSettings, OperationalStatus, OperationalStatusSecondary,
+    RequestedState, ShutdownType, VmState,
+};
 use crate::wmi::{WbemClassObjectExt, WmiConnection};
+use std::path::Path;
 use windows::Win32::System::Wmi::IWbemClassObject;
 
 /// Represents a Hyper-V virtual machine (Msvm_ComputerSystem).
@@ -167,6 +171,251 @@ impl VirtualMachine {
         self.refresh()
     }
 
+    /// Hibernate the VM (S4 power state).
+    ///
+    /// This triggers a guest-initiated hibernate/save to disk operation.
+    /// The VM must have hibernate enabled in its settings for this to work.
+    ///
+    /// Note: If the VM is being migrated, this operation will fail with
+    /// an appropriate error.
+    pub fn hibernate(&mut self) -> Result<()> {
+        // Check if VM can be hibernated
+        if !self.state.can_hibernate() {
+            return Err(Error::InvalidState {
+                vm_name: self.name.clone(),
+                current: self.state.to_error(),
+                operation: "hibernate",
+            });
+        }
+
+        // Check if VM is being migrated (matching C++ behavior)
+        let (_, secondary_status) = self.get_operational_status()?;
+        if secondary_status.is_migrating() {
+            return Err(Error::InvalidState {
+                vm_name: self.name.clone(),
+                current: crate::error::VmStateError::Migrating,
+                operation: "hibernate",
+            });
+        }
+
+        self.request_state_change(RequestedState::Hibernated)?;
+        self.refresh()
+    }
+
+    /// Get the operational status of the VM.
+    ///
+    /// Returns both primary and secondary operational status.
+    /// The secondary status provides additional context about ongoing operations
+    /// such as migrations, snapshot operations, etc.
+    pub fn get_operational_status(
+        &self,
+    ) -> Result<(OperationalStatus, OperationalStatusSecondary)> {
+        let obj = self.connection.get_object(&self.path)?;
+
+        // Get the OperationalStatus array
+        let status_array = obj.get_u16_array("OperationalStatus")?;
+
+        let primary_status = status_array
+            .first()
+            .map(|&v| OperationalStatus::from_value(v))
+            .unwrap_or(OperationalStatus::Unknown);
+
+        let secondary_status = status_array
+            .get(1)
+            .map(|&v| OperationalStatusSecondary::from_value(v))
+            .unwrap_or(OperationalStatusSecondary::None);
+
+        Ok((primary_status, secondary_status))
+    }
+
+    /// Check if the VM is currently being migrated.
+    pub fn is_migrating(&self) -> Result<bool> {
+        let (_, secondary_status) = self.get_operational_status()?;
+        Ok(secondary_status.is_migrating())
+    }
+
+    // ========================================================================
+    // Export/Import Operations
+    // ========================================================================
+
+    /// Export the VM to the specified directory.
+    ///
+    /// This exports the VM configuration and optionally runtime state and storage.
+    /// The export creates a subdirectory with the VM name in the export directory.
+    ///
+    /// # Arguments
+    ///
+    /// * `export_directory` - The directory where the VM export will be created.
+    /// * `settings` - Export settings controlling what is included.
+    ///
+    /// # Example
+    ///
+    /// ```no_run
+    /// # use windows_hyperv::{HyperV, ExportSettings};
+    /// # fn main() -> windows_hyperv::Result<()> {
+    /// let hyperv = HyperV::connect()?;
+    /// let vm = hyperv.get_vm("MyVM")?;
+    ///
+    /// // Full export (includes runtime state)
+    /// vm.export("C:\\Exports", &ExportSettings::full())?;
+    ///
+    /// // Config-only export
+    /// vm.export("C:\\Exports", &ExportSettings::config_only())?;
+    /// # Ok(())
+    /// # }
+    /// ```
+    pub fn export(&self, export_directory: impl AsRef<Path>, settings: &ExportSettings) -> Result<()> {
+        let export_dir = export_directory.as_ref();
+
+        // Get the computer system object
+        let computer_system = self.connection.get_object(&self.path)?;
+        let computer_system_path = computer_system.get_path()?;
+
+        // Create export setting data instance
+        let instance_id = format!("Microsoft:{}", self.id);
+
+        // Get the Msvm_VirtualSystemExportSettingData class for spawning
+        let export_settings_class = self
+            .connection
+            .get_class("Msvm_VirtualSystemExportSettingData")?;
+        let export_settings_instance = unsafe {
+            export_settings_class.SpawnInstance(0).map_err(|e| Error::WmiMethod {
+                class: "Msvm_VirtualSystemExportSettingData",
+                method: "SpawnInstance",
+                source: e,
+            })?
+        };
+
+        // Set export settings properties
+        export_settings_instance.put_string("InstanceID", &instance_id)?;
+        export_settings_instance.put_bool("CopyVmRuntimeInformation", settings.copy_runtime_info)?;
+        export_settings_instance.put_bool("CopyVmStorage", settings.copy_storage)?;
+        export_settings_instance.put_bool("CreateVmExportSubdirectory", settings.create_subdirectory)?;
+        export_settings_instance.put_u16("CopySnapshotConfiguration", settings.snapshot_mode.to_value() as u16)?;
+        export_settings_instance.put_u16("CaptureLiveState", settings.capture_live_state.to_value() as u16)?;
+
+        if settings.for_live_migration {
+            export_settings_instance.put_bool("ExportForLiveMigration", true)?;
+        }
+
+        // Serialize the export settings to embedded instance text
+        let export_settings_text = export_settings_instance.get_text()?;
+
+        // Get the virtual system management service
+        let vsms = self
+            .connection
+            .get_singleton("Msvm_VirtualSystemManagementService")?;
+        let vsms_path = vsms.get_path()?;
+
+        // Create method input parameters
+        let in_params = self
+            .connection
+            .get_method_params("Msvm_VirtualSystemManagementService", "ExportSystemDefinition")?;
+
+        // Set parameters
+        in_params.put_string("ComputerSystem", &computer_system_path)?;
+        in_params.put_string("ExportDirectory", &export_dir.to_string_lossy())?;
+        in_params.put_string("ExportSettingData", &export_settings_text)?;
+
+        // Execute the method
+        let out_params = self
+            .connection
+            .exec_method(&vsms_path, "ExportSystemDefinition", Some(&in_params))?;
+
+        let return_value = out_params.get_u32("ReturnValue")?.unwrap_or(0);
+
+        match return_value {
+            0 => Ok(()), // Completed
+            4096 => {
+                // Job started - wait for completion
+                let job_path: std::string::String = out_params
+                    .get_string_prop("Job")
+                    .ok()
+                    .flatten()
+                    .unwrap_or_default();
+                if !job_path.is_empty() {
+                    self.wait_for_job(&job_path)
+                } else {
+                    Ok(())
+                }
+            }
+            code => Err(Error::OperationFailed {
+                failure_type: crate::error::FailureType::Unknown,
+                operation: "ExportSystemDefinition",
+                return_value: code,
+                message: format!("Export VM '{}' failed", self.name),
+            }),
+        }
+    }
+
+    /// Export only the VM configuration (no runtime state).
+    ///
+    /// This is a convenience method equivalent to `export(dir, &ExportSettings::config_only())`.
+    pub fn export_config(&self, export_directory: impl AsRef<Path>) -> Result<()> {
+        self.export(export_directory, &ExportSettings::config_only())
+    }
+
+    /// Export the VM for live migration.
+    ///
+    /// This exports the VM in a format suitable for live migration scenarios.
+    /// The export includes only configuration data needed for migration.
+    pub fn export_for_live_migration(&self, export_directory: impl AsRef<Path>) -> Result<()> {
+        self.export(export_directory, &ExportSettings::for_live_migration())
+    }
+
+    /// Restore the VM from a custom saved state file.
+    ///
+    /// This method restores a VM from an exported saved state file (.vmrs).
+    /// The VM must exist and be in a state that supports custom restore.
+    ///
+    /// # Arguments
+    ///
+    /// * `vmrs_filepath` - Path to the .vmrs saved state file.
+    pub fn custom_restore(&self, vmrs_filepath: impl AsRef<Path>) -> Result<()> {
+        let vmrs_path = vmrs_filepath.as_ref();
+
+        // Get the computer system object
+        let computer_system = self.connection.get_object(&self.path)?;
+        let computer_system_path = computer_system.get_path()?;
+
+        // Create method input parameters
+        let in_params = self
+            .connection
+            .get_method_params("Msvm_ComputerSystem", "RequestCustomRestore")?;
+
+        in_params.put_string("RestoreSettings", &vmrs_path.to_string_lossy())?;
+
+        // Execute the method
+        let out_params = self
+            .connection
+            .exec_method(&computer_system_path, "RequestCustomRestore", Some(&in_params))?;
+
+        let return_value = out_params.get_u32("ReturnValue")?.unwrap_or(0);
+
+        match return_value {
+            0 => Ok(()), // Completed
+            4096 => {
+                // Job started - wait for completion
+                let job_path: std::string::String = out_params
+                    .get_string_prop("Job")
+                    .ok()
+                    .flatten()
+                    .unwrap_or_default();
+                if !job_path.is_empty() {
+                    self.wait_for_job(&job_path)
+                } else {
+                    Ok(())
+                }
+            }
+            code => Err(Error::OperationFailed {
+                failure_type: crate::error::FailureType::Unknown,
+                operation: "RequestCustomRestore",
+                return_value: code,
+                message: format!("Custom restore for VM '{}' failed", self.name),
+            }),
+        }
+    }
+
     /// Get memory size in MB.
     pub fn memory_mb(&self) -> Result<u64> {
         let query = format!(
@@ -255,6 +504,7 @@ impl VirtualMachine {
                 }
             }
             code => Err(Error::OperationFailed {
+                failure_type: crate::error::FailureType::Unknown,
                 operation: "RequestStateChange",
                 return_value: code,
                 message: format!("State change to {:?} failed", requested),
@@ -273,6 +523,7 @@ impl VirtualMachine {
             self.connection
                 .query_first(&query)?
                 .ok_or_else(|| Error::OperationFailed {
+                    failure_type: crate::error::FailureType::Unknown,
                     operation: "GracefulShutdown",
                     return_value: 0,
                     message: "Shutdown integration service not available".to_string(),
@@ -294,6 +545,7 @@ impl VirtualMachine {
             Ok(())
         } else {
             Err(Error::OperationFailed {
+                failure_type: crate::error::FailureType::Unknown,
                 operation: "InitiateShutdown",
                 return_value,
                 message: "Graceful shutdown failed".to_string(),
@@ -314,6 +566,7 @@ impl VirtualMachine {
                     let error_code = job.get_u32("ErrorCode")?.unwrap_or(0);
                     let error_desc = job.get_string_prop("ErrorDescription")?.unwrap_or_default();
                     return Err(Error::JobFailed {
+                        job_state: crate::error::JobState::Exception,
                         operation: "Job",
                         error_code,
                         error_description: error_desc,

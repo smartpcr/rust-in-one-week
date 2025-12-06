@@ -69,3 +69,7 @@ path = "examples/checkpoints.rs"
 [[example]]
 name = "full_vm_setup"
 path = "examples/full_vm_setup.rs"
+
+[[example]]
+name = "export_import"
+path = "examples/export_import.rs"

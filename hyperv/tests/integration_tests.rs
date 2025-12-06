@@ -13,8 +13,8 @@
 #![cfg(all(windows, feature = "integration"))]
 
 use windows_hyperv::{
-    CheckpointSettings, Generation, HyperV, MemoryMB, NetworkAdapterSettings, ProcessorCount,
-    ShutdownType, VhdSettings, VmSettings, VmState,
+    CheckpointSettings, ExportSettings, Generation, HyperV, ImportSettings, MemoryMB,
+    NetworkAdapterSettings, ProcessorCount, ShutdownType, VhdSettings, VmSettings, VmState,
 };
 
 const TEST_VM_PREFIX: &str = "HyperV_IntegTest_";
@@ -327,4 +327,291 @@ fn test_vhd_manager_create() {
 
     // Cleanup
     let _ = std::fs::remove_file(&vhd_path);
+}
+
+#[test]
+fn test_vm_hibernate() {
+    let hyperv = HyperV::connect().expect("Failed to connect");
+    let vm_name = test_vm_name("Hibernate");
+
+    // Cleanup any leftover test VM
+    cleanup_test_vm(&hyperv, &vm_name);
+
+    // Create VM
+    let settings = VmSettings::builder()
+        .name(&vm_name)
+        .generation(Generation::Gen2)
+        .memory(MemoryMB::mb_512())
+        .processors(ProcessorCount::one())
+        .build()
+        .expect("Failed to build VM settings");
+
+    let _vm = hyperv.create_vm(&settings).expect("Failed to create VM");
+
+    // Start VM
+    let mut vm = hyperv.get_vm(&vm_name).expect("Failed to get VM");
+    vm.start().expect("Failed to start VM");
+
+    // Wait for VM to start
+    std::thread::sleep(std::time::Duration::from_secs(3));
+
+    // Try to hibernate (may fail if VM doesn't support it without OS)
+    // This is more of a smoke test to ensure the method doesn't panic
+    let hibernate_result = vm.hibernate();
+    // Note: Hibernate typically requires a running OS with hibernate support
+    // This test mainly verifies the API works without panicking
+    if hibernate_result.is_err() {
+        println!(
+            "Hibernate not supported (expected without running OS): {:?}",
+            hibernate_result.err()
+        );
+    }
+
+    // Stop VM
+    let _ = vm.stop(ShutdownType::Force);
+    std::thread::sleep(std::time::Duration::from_secs(2));
+
+    // Cleanup
+    cleanup_test_vm(&hyperv, &vm_name);
+}
+
+#[test]
+fn test_vm_operational_status() {
+    let hyperv = HyperV::connect().expect("Failed to connect");
+    let vm_name = test_vm_name("OpStatus");
+
+    // Cleanup any leftover test VM
+    cleanup_test_vm(&hyperv, &vm_name);
+
+    // Create VM
+    let settings = VmSettings::builder()
+        .name(&vm_name)
+        .generation(Generation::Gen2)
+        .memory(MemoryMB::mb_512())
+        .processors(ProcessorCount::one())
+        .build()
+        .expect("Failed to build VM settings");
+
+    let _vm = hyperv.create_vm(&settings).expect("Failed to create VM");
+    let vm = hyperv.get_vm(&vm_name).expect("Failed to get VM");
+
+    // Get operational status
+    let status = vm.get_operational_status();
+    assert!(
+        status.is_ok(),
+        "Failed to get operational status: {:?}",
+        status.err()
+    );
+
+    let (primary, secondary) = status.unwrap();
+    println!("Operational status: {:?}, {:?}", primary, secondary);
+
+    // Check is_migrating (should be false for a new VM)
+    let is_migrating = vm.is_migrating();
+    assert!(
+        is_migrating.is_ok(),
+        "Failed to check migration status: {:?}",
+        is_migrating.err()
+    );
+    assert!(!is_migrating.unwrap(), "New VM should not be migrating");
+
+    // Cleanup
+    cleanup_test_vm(&hyperv, &vm_name);
+}
+
+#[test]
+fn test_vm_export_config() {
+    let hyperv = HyperV::connect().expect("Failed to connect");
+    let vm_name = test_vm_name("ExportConfig");
+    let export_dir = std::env::temp_dir().join("hyperv_export_test");
+
+    // Cleanup any leftover test VM and export directory
+    cleanup_test_vm(&hyperv, &vm_name);
+    let _ = std::fs::remove_dir_all(&export_dir);
+
+    // Create export directory
+    std::fs::create_dir_all(&export_dir).expect("Failed to create export directory");
+
+    // Create VM
+    let settings = VmSettings::builder()
+        .name(&vm_name)
+        .generation(Generation::Gen2)
+        .memory(MemoryMB::mb_512())
+        .processors(ProcessorCount::one())
+        .build()
+        .expect("Failed to build VM settings");
+
+    let _vm = hyperv.create_vm(&settings).expect("Failed to create VM");
+    let vm = hyperv.get_vm(&vm_name).expect("Failed to get VM");
+
+    // Export config only
+    let export_result = vm.export_config(&export_dir);
+    assert!(
+        export_result.is_ok(),
+        "Failed to export VM config: {:?}",
+        export_result.err()
+    );
+
+    // Verify export directory was created
+    let vm_export_dir = export_dir.join(&vm_name);
+    assert!(vm_export_dir.exists(), "VM export directory should exist");
+
+    // Verify Virtual Machines folder exists
+    let vm_machines_dir = vm_export_dir.join("Virtual Machines");
+    assert!(
+        vm_machines_dir.exists(),
+        "Virtual Machines folder should exist"
+    );
+
+    // Cleanup
+    cleanup_test_vm(&hyperv, &vm_name);
+    let _ = std::fs::remove_dir_all(&export_dir);
+}
+
+#[test]
+fn test_vm_export_full() {
+    let hyperv = HyperV::connect().expect("Failed to connect");
+    let vm_name = test_vm_name("ExportFull");
+    let export_dir = std::env::temp_dir().join("hyperv_export_full_test");
+
+    // Cleanup any leftover test VM and export directory
+    cleanup_test_vm(&hyperv, &vm_name);
+    let _ = std::fs::remove_dir_all(&export_dir);
+
+    // Create export directory
+    std::fs::create_dir_all(&export_dir).expect("Failed to create export directory");
+
+    // Create VM
+    let settings = VmSettings::builder()
+        .name(&vm_name)
+        .generation(Generation::Gen2)
+        .memory(MemoryMB::mb_512())
+        .processors(ProcessorCount::one())
+        .build()
+        .expect("Failed to build VM settings");
+
+    let _vm = hyperv.create_vm(&settings).expect("Failed to create VM");
+    let vm = hyperv.get_vm(&vm_name).expect("Failed to get VM");
+
+    // Export with full settings
+    let export_settings = ExportSettings::full();
+    let export_result = vm.export(&export_dir, &export_settings);
+    assert!(
+        export_result.is_ok(),
+        "Failed to export VM: {:?}",
+        export_result.err()
+    );
+
+    // Verify export directory was created
+    let vm_export_dir = export_dir.join(&vm_name);
+    assert!(vm_export_dir.exists(), "VM export directory should exist");
+
+    // Cleanup
+    cleanup_test_vm(&hyperv, &vm_name);
+    let _ = std::fs::remove_dir_all(&export_dir);
+}
+
+#[test]
+fn test_vm_export_and_import() {
+    let hyperv = HyperV::connect().expect("Failed to connect");
+    let vm_name = test_vm_name("ExportImport");
+    let imported_vm_name = test_vm_name("ExportImport"); // Same name after import
+    let export_dir = std::env::temp_dir().join("hyperv_export_import_test");
+
+    // Cleanup any leftover test VMs and export directory
+    cleanup_test_vm(&hyperv, &vm_name);
+    cleanup_test_vm(&hyperv, &imported_vm_name);
+    let _ = std::fs::remove_dir_all(&export_dir);
+
+    // Create export directory
+    std::fs::create_dir_all(&export_dir).expect("Failed to create export directory");
+
+    // Create VM
+    let settings = VmSettings::builder()
+        .name(&vm_name)
+        .generation(Generation::Gen2)
+        .memory(MemoryMB::mb_512())
+        .processors(ProcessorCount::one())
+        .build()
+        .expect("Failed to build VM settings");
+
+    let _vm = hyperv.create_vm(&settings).expect("Failed to create VM");
+    let vm = hyperv.get_vm(&vm_name).expect("Failed to get VM");
+
+    // Export config only
+    let export_result = vm.export_config(&export_dir);
+    assert!(
+        export_result.is_ok(),
+        "Failed to export VM: {:?}",
+        export_result.err()
+    );
+
+    // Delete the original VM
+    let delete_result = hyperv.delete_vm(&vm);
+    assert!(
+        delete_result.is_ok(),
+        "Failed to delete VM: {:?}",
+        delete_result.err()
+    );
+
+    // Wait for deletion to complete
+    std::thread::sleep(std::time::Duration::from_secs(2));
+
+    // Import the VM with new ID to avoid conflicts
+    let import_settings = ImportSettings::new_id();
+    let import_result = hyperv.import_vm(&vm_name, &export_dir, &import_settings);
+    assert!(
+        import_result.is_ok(),
+        "Failed to import VM: {:?}",
+        import_result.err()
+    );
+
+    let imported_vm = import_result.unwrap();
+    assert_eq!(imported_vm.name(), vm_name);
+    assert_eq!(imported_vm.state(), VmState::Off);
+
+    // Cleanup
+    cleanup_test_vm(&hyperv, &imported_vm_name);
+    let _ = std::fs::remove_dir_all(&export_dir);
+}
+
+#[test]
+fn test_vm_export_with_custom_settings() {
+    let hyperv = HyperV::connect().expect("Failed to connect");
+    let vm_name = test_vm_name("ExportCustom");
+    let export_dir = std::env::temp_dir().join("hyperv_export_custom_test");
+
+    // Cleanup any leftover test VM and export directory
+    cleanup_test_vm(&hyperv, &vm_name);
+    let _ = std::fs::remove_dir_all(&export_dir);
+
+    // Create export directory
+    std::fs::create_dir_all(&export_dir).expect("Failed to create export directory");
+
+    // Create VM
+    let settings = VmSettings::builder()
+        .name(&vm_name)
+        .generation(Generation::Gen2)
+        .memory(MemoryMB::mb_512())
+        .processors(ProcessorCount::one())
+        .build()
+        .expect("Failed to build VM settings");
+
+    let _vm = hyperv.create_vm(&settings).expect("Failed to create VM");
+    let vm = hyperv.get_vm(&vm_name).expect("Failed to get VM");
+
+    // Export with custom settings using builder pattern
+    let export_settings = ExportSettings::config_only()
+        .with_overwrite(true);
+
+    let export_result = vm.export(&export_dir, &export_settings);
+    assert!(
+        export_result.is_ok(),
+        "Failed to export VM with custom settings: {:?}",
+        export_result.err()
+    );
+
+    // Cleanup
+    cleanup_test_vm(&hyperv, &vm_name);
+    let _ = std::fs::remove_dir_all(&export_dir);
 }

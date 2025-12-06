@@ -1,4 +1,4 @@
-use crate::error::{Error, Result};
+use crate::error::{Error, FailureType, Result};
 use windows::core::{BSTR, HSTRING, PCWSTR};
 use windows::Win32::System::Com::{
     CoCreateInstance, CoInitializeEx, CoInitializeSecurity, CoSetProxyBlanket,
@@ -8,10 +8,12 @@ use windows::Win32::System::Com::{
 use windows::Win32::System::Rpc::{RPC_C_AUTHN_WINNT, RPC_C_AUTHZ_NONE};
 use windows::Win32::System::Wmi::{
     IEnumWbemClassObject, IWbemClassObject, IWbemLocator, IWbemServices, WbemLocator,
-    WBEM_FLAG_FORWARD_ONLY, WBEM_FLAG_RETURN_IMMEDIATELY, WBEM_INFINITE,
+    WBEM_FLAG_CONNECT_USE_MAX_WAIT, WBEM_FLAG_FORWARD_ONLY, WBEM_FLAG_RETURN_IMMEDIATELY,
+    WBEM_INFINITE,
 };
 
 use std::cell::Cell;
+use std::time::Duration;
 
 thread_local! {
     static COM_INITIALIZED: Cell<bool> = const { Cell::new(false) };
@@ -20,25 +22,171 @@ thread_local! {
 /// Hyper-V WMI namespace.
 pub const HYPERV_NAMESPACE: &str = r"root\virtualization\v2";
 
+/// Default connection timeout.
+pub const DEFAULT_TIMEOUT: Duration = Duration::from_secs(30);
+
+/// Credentials for remote WMI connection.
+#[derive(Clone)]
+pub struct Credentials {
+    /// Domain (optional).
+    pub domain: Option<String>,
+    /// Username.
+    pub username: String,
+    /// Password (stored securely).
+    password: String,
+}
+
+impl std::fmt::Debug for Credentials {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        f.debug_struct("Credentials")
+            .field("domain", &self.domain)
+            .field("username", &self.username)
+            .field("password", &"[REDACTED]")
+            .finish()
+    }
+}
+
+impl Credentials {
+    /// Create new credentials.
+    pub fn new(username: impl Into<String>, password: impl Into<String>) -> Self {
+        Self {
+            domain: None,
+            username: username.into(),
+            password: password.into(),
+        }
+    }
+
+    /// Create credentials with domain.
+    pub fn with_domain(
+        domain: impl Into<String>,
+        username: impl Into<String>,
+        password: impl Into<String>,
+    ) -> Self {
+        Self {
+            domain: Some(domain.into()),
+            username: username.into(),
+            password: password.into(),
+        }
+    }
+
+    /// Get the full username (domain\user or just user).
+    pub fn full_username(&self) -> String {
+        if let Some(ref domain) = self.domain {
+            format!("{}\\{}", domain, self.username)
+        } else {
+            self.username.clone()
+        }
+    }
+
+    /// Get password for WMI connection (internal use only).
+    pub(crate) fn password_str(&self) -> &str {
+        &self.password
+    }
+}
+
+/// WMI connection configuration.
+#[derive(Debug, Clone)]
+pub struct ConnectionConfig {
+    /// Target machine name (None for local).
+    pub machine_name: Option<String>,
+    /// Credentials for remote connection.
+    pub credentials: Option<Credentials>,
+    /// Connection timeout.
+    pub timeout: Duration,
+    /// WMI namespace.
+    pub namespace: String,
+}
+
+impl Default for ConnectionConfig {
+    fn default() -> Self {
+        Self {
+            machine_name: None,
+            credentials: None,
+            timeout: DEFAULT_TIMEOUT,
+            namespace: HYPERV_NAMESPACE.to_string(),
+        }
+    }
+}
+
+impl ConnectionConfig {
+    /// Create local connection config.
+    pub fn local() -> Self {
+        Self::default()
+    }
+
+    /// Create remote connection config.
+    pub fn remote(machine_name: impl Into<String>) -> Self {
+        Self {
+            machine_name: Some(machine_name.into()),
+            ..Default::default()
+        }
+    }
+
+    /// Add credentials.
+    pub fn with_credentials(mut self, credentials: Credentials) -> Self {
+        self.credentials = Some(credentials);
+        self
+    }
+
+    /// Set timeout.
+    pub fn with_timeout(mut self, timeout: Duration) -> Self {
+        self.timeout = timeout;
+        self
+    }
+
+    /// Set namespace.
+    pub fn with_namespace(mut self, namespace: impl Into<String>) -> Self {
+        self.namespace = namespace.into();
+        self
+    }
+
+    /// Build the full namespace path for WMI connection.
+    fn namespace_path(&self) -> String {
+        if let Some(ref machine) = self.machine_name {
+            format!("\\\\{}\\{}", machine, self.namespace)
+        } else {
+            self.namespace.clone()
+        }
+    }
+}
+
 /// WMI connection wrapper for Hyper-V operations.
 pub struct WmiConnection {
     services: IWbemServices,
+    config: ConnectionConfig,
 }
 
 impl std::fmt::Debug for WmiConnection {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
-        f.debug_struct("WmiConnection").finish_non_exhaustive()
+        f.debug_struct("WmiConnection")
+            .field("config", &self.config)
+            .finish_non_exhaustive()
     }
 }
 
 impl WmiConnection {
     /// Connect to the Hyper-V WMI namespace.
     pub fn connect() -> Result<Self> {
-        Self::connect_to(HYPERV_NAMESPACE)
+        Self::connect_with_config(ConnectionConfig::local())
     }
 
     /// Connect to a specific WMI namespace.
     pub fn connect_to(namespace: &str) -> Result<Self> {
+        Self::connect_with_config(ConnectionConfig::local().with_namespace(namespace))
+    }
+
+    /// Connect to a remote machine.
+    pub fn connect_remote(
+        machine_name: impl Into<String>,
+        credentials: Credentials,
+    ) -> Result<Self> {
+        Self::connect_with_config(
+            ConnectionConfig::remote(machine_name).with_credentials(credentials),
+        )
+    }
+
+    /// Connect with full configuration.
+    pub fn connect_with_config(config: ConnectionConfig) -> Result<Self> {
         unsafe {
             // Initialize COM if not already done
             Self::init_com()?;
@@ -47,19 +195,66 @@ impl WmiConnection {
             let locator: IWbemLocator = CoCreateInstance(&WbemLocator, None, CLSCTX_INPROC_SERVER)
                 .map_err(Error::WmiConnection)?;
 
+            // Build namespace path
+            let namespace_path = config.namespace_path();
+            let namespace_bstr = BSTR::from(&namespace_path);
+
             // Connect to namespace
-            let namespace_bstr = BSTR::from(namespace);
-            let services = locator
-                .ConnectServer(
-                    &namespace_bstr,
-                    &BSTR::new(),
-                    &BSTR::new(),
-                    &BSTR::new(),
-                    0,
-                    &BSTR::new(),
-                    None,
-                )
-                .map_err(Error::WmiConnection)?;
+            let services = if let Some(ref creds) = config.credentials {
+                let user_bstr = BSTR::from(creds.full_username());
+                let pass_bstr = BSTR::from(creds.password_str());
+
+                locator
+                    .ConnectServer(
+                        &namespace_bstr,
+                        &user_bstr,
+                        &pass_bstr,
+                        &BSTR::new(),
+                        WBEM_FLAG_CONNECT_USE_MAX_WAIT.0 as i32,
+                        &BSTR::new(),
+                        None,
+                    )
+                    .map_err(|e| {
+                        // Check for authentication errors
+                        let hresult = e.code().0 as u32;
+                        if hresult == 0x80041003 || hresult == 0x80041017 {
+                            // WBEM_E_ACCESS_DENIED or WBEM_E_INVALID_AUTHENTICATION
+                            Error::AuthenticationFailed {
+                                machine: config.machine_name.clone().unwrap_or_default(),
+                                username: creds.full_username(),
+                                message: e.to_string(),
+                            }
+                        } else {
+                            Error::RemoteConnection {
+                                machine: config.machine_name.clone().unwrap_or_default(),
+                                message: e.to_string(),
+                                failure_type: FailureType::Network,
+                            }
+                        }
+                    })?
+            } else {
+                locator
+                    .ConnectServer(
+                        &namespace_bstr,
+                        &BSTR::new(),
+                        &BSTR::new(),
+                        &BSTR::new(),
+                        0,
+                        &BSTR::new(),
+                        None,
+                    )
+                    .map_err(|e| {
+                        if config.machine_name.is_some() {
+                            Error::RemoteConnection {
+                                machine: config.machine_name.clone().unwrap_or_default(),
+                                message: e.to_string(),
+                                failure_type: FailureType::Network,
+                            }
+                        } else {
+                            Error::WmiConnection(e)
+                        }
+                    })?
+            };
 
             // Set security on the proxy
             CoSetProxyBlanket(
@@ -74,8 +269,23 @@ impl WmiConnection {
             )
             .map_err(Error::WmiConnection)?;
 
-            Ok(Self { services })
+            Ok(Self { services, config })
         }
+    }
+
+    /// Get the connection configuration.
+    pub fn config(&self) -> &ConnectionConfig {
+        &self.config
+    }
+
+    /// Check if connected to a remote machine.
+    pub fn is_remote(&self) -> bool {
+        self.config.machine_name.is_some()
+    }
+
+    /// Get the target machine name (None for local).
+    pub fn machine_name(&self) -> Option<&str> {
+        self.config.machine_name.as_deref()
     }
 
     /// Initialize COM for the current thread.
@@ -186,6 +396,7 @@ impl WmiConnection {
         let pool = self
             .query_first(&pool_query)?
             .ok_or_else(|| Error::OperationFailed {
+                failure_type: crate::error::FailureType::Unknown,
                 operation: "GetDefaultResource",
                 return_value: 0,
                 message: format!("Resource pool not found for subtype: {}", resource_subtype),
@@ -200,6 +411,7 @@ impl WmiConnection {
         let caps = self
             .query_first(&caps_query)?
             .ok_or_else(|| Error::OperationFailed {
+                failure_type: crate::error::FailureType::Unknown,
                 operation: "GetDefaultResource",
                 return_value: 0,
                 message: "Allocation capabilities not found".to_string(),
@@ -229,6 +441,7 @@ impl WmiConnection {
         }
 
         Err(Error::OperationFailed {
+            failure_type: crate::error::FailureType::Unknown,
             operation: "GetDefaultResource",
             return_value: 0,
             message: format!(
@@ -236,6 +449,21 @@ impl WmiConnection {
                 resource_subtype
             ),
         })
+    }
+
+    /// Get a singleton instance of a WMI class.
+    ///
+    /// This queries for a class that should have exactly one instance, like
+    /// `Msvm_VirtualSystemManagementService`.
+    pub fn get_singleton(&self, class_name: &str) -> Result<IWbemClassObject> {
+        let query = format!("SELECT * FROM {}", class_name);
+        self.query_first(&query)?
+            .ok_or_else(|| Error::OperationFailed {
+                failure_type: FailureType::Permanent,
+                operation: "GetSingleton",
+                return_value: 0,
+                message: format!("Singleton {} not found", class_name),
+            })
     }
 
     /// Execute a method on a WMI object.
@@ -371,6 +599,9 @@ pub trait WbemClassObjectExt {
 
     /// Get a string array property.
     fn get_string_array(&self, name: &str) -> Result<Option<Vec<std::string::String>>>;
+
+    /// Get a u16 array property.
+    fn get_u16_array(&self, name: &str) -> Result<Vec<u16>>;
 
     /// Set a string property.
     fn put_string(&self, name: &str, value: &str) -> Result<()>;
@@ -510,6 +741,67 @@ impl WbemClassObjectExt for IWbemClassObject {
         }
     }
 
+    fn get_u16_array(&self, name: &str) -> Result<Vec<u16>> {
+        use windows::Win32::System::Ole::{SafeArrayGetElement, SafeArrayGetLBound, SafeArrayGetUBound};
+        use windows::Win32::System::Variant::{VARIANT, VT_ARRAY, VT_EMPTY, VT_I2, VT_NULL, VT_UI2};
+
+        unsafe {
+            let name_hstring = HSTRING::from(name);
+            let mut value = VARIANT::default();
+            let hr = self.Get(PCWSTR(name_hstring.as_ptr()), 0, &mut value, None, None);
+            if hr.is_err() {
+                return Ok(Vec::new());
+            }
+
+            let vt = value.Anonymous.Anonymous.vt;
+            if vt == VT_NULL || vt == VT_EMPTY {
+                return Ok(Vec::new());
+            }
+
+            // Check for array of u16 (VT_ARRAY | VT_UI2 or VT_ARRAY | VT_I2)
+            if (vt & VT_ARRAY) != VT_ARRAY {
+                return Ok(Vec::new());
+            }
+
+            let base_type = vt & !VT_ARRAY;
+            if base_type != VT_UI2 && base_type != VT_I2 {
+                return Ok(Vec::new());
+            }
+
+            let sa = value.Anonymous.Anonymous.Anonymous.parray;
+            if sa.is_null() {
+                return Ok(Vec::new());
+            }
+
+            let lower_bound = SafeArrayGetLBound(sa, 1).map_err(|e| Error::WmiMethod {
+                class: "SafeArray",
+                method: "GetLBound",
+                source: e,
+            })?;
+            let upper_bound = SafeArrayGetUBound(sa, 1).map_err(|e| Error::WmiMethod {
+                class: "SafeArray",
+                method: "GetUBound",
+                source: e,
+            })?;
+
+            let mut result = Vec::with_capacity((upper_bound - lower_bound + 1) as usize);
+
+            for i in lower_bound..=upper_bound {
+                let mut element: u16 = 0;
+                SafeArrayGetElement(sa, &i, &mut element as *mut _ as *mut _).map_err(|e| {
+                    Error::WmiMethod {
+                        class: "SafeArray",
+                        method: "GetElement",
+                        source: e,
+                    }
+                })?;
+                result.push(element);
+            }
+
+            Ok(result)
+        }
+    }
+
     fn put_string(&self, name: &str, value: &str) -> Result<()> {
         use windows::Win32::System::Variant::VARIANT;
 
@@ -595,6 +887,7 @@ impl WbemClassObjectExt for IWbemClassObject {
             let sa = SafeArrayCreate(VT_BSTR, 1, &bounds);
             if sa.is_null() {
                 return Err(Error::OperationFailed {
+                    failure_type: crate::error::FailureType::Unknown,
                     operation: "SafeArrayCreate",
                     return_value: 0,
                     message: "Failed to create SAFEARRAY".to_string(),
@@ -609,6 +902,7 @@ impl WbemClassObjectExt for IWbemClassObject {
                 if hr.is_err() {
                     let _ = SafeArrayDestroy(sa);
                     return Err(Error::OperationFailed {
+                        failure_type: crate::error::FailureType::Unknown,
                         operation: "SafeArrayPutElement",
                         return_value: 0,
                         message: format!("Failed to put element {}", i),

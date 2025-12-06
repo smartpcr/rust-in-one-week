@@ -32,6 +32,11 @@ pub enum VmState {
     Pausing = 32776,
     /// VM is resuming.
     Resuming = 32777,
+    /// VM is saved/hibernated (WMI v2 state = 32779).
+    /// This maps to EnabledStateSaved in WMI v2.
+    SavedV2 = 32779,
+    /// VM is hibernated (S4 power state, WMI v2 state = 32783).
+    Hibernated = 32783,
 }
 
 impl VmState {
@@ -51,13 +56,22 @@ impl VmState {
             32774 => VmState::Stopping,
             32776 => VmState::Pausing,
             32777 => VmState::Resuming,
+            32779 => VmState::SavedV2,
+            32783 => VmState::Hibernated,
             _ => VmState::Unknown,
         }
     }
 
     /// Check if VM can be started.
     pub fn can_start(&self) -> bool {
-        matches!(self, VmState::Off | VmState::Suspended | VmState::Paused)
+        matches!(
+            self,
+            VmState::Off
+                | VmState::Suspended
+                | VmState::Paused
+                | VmState::SavedV2
+                | VmState::Hibernated
+        )
     }
 
     /// Check if VM can be stopped.
@@ -78,6 +92,13 @@ impl VmState {
         matches!(self, VmState::Running | VmState::Paused)
     }
 
+    /// Check if VM can be hibernated (S4 power state).
+    ///
+    /// Hibernate requires the VM to be running and have hibernate enabled in VM settings.
+    pub fn can_hibernate(&self) -> bool {
+        matches!(self, VmState::Running)
+    }
+
     /// Check if VM is in a transitional state.
     pub fn is_transitional(&self) -> bool {
         matches!(
@@ -89,6 +110,14 @@ impl VmState {
                 | VmState::Resuming
                 | VmState::ShuttingDown
                 | VmState::Snapshotting
+        )
+    }
+
+    /// Check if VM is in a saved/hibernated state.
+    pub fn is_saved(&self) -> bool {
+        matches!(
+            self,
+            VmState::Suspended | VmState::SavedV2 | VmState::Hibernated
         )
     }
 }
@@ -110,6 +139,8 @@ impl fmt::Display for VmState {
             VmState::Stopping => "Stopping",
             VmState::Pausing => "Pausing",
             VmState::Resuming => "Resuming",
+            VmState::SavedV2 => "Saved",
+            VmState::Hibernated => "Hibernated",
         };
         write!(f, "{}", s)
     }
@@ -153,7 +184,7 @@ impl fmt::Display for Generation {
     }
 }
 
-/// VM operational status.
+/// VM operational status (primary).
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Hash)]
 #[repr(u16)]
 pub enum OperationalStatus {
@@ -179,6 +210,58 @@ pub enum OperationalStatus {
     ApplicationCriticalState = 32782,
     CommunicationTimedOut = 32783,
     CommunicationFailed = 32784,
+}
+
+/// VM operational status (secondary).
+///
+/// The secondary operational status provides additional context about
+/// ongoing operations on the VM, particularly during migrations and snapshots.
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Hash)]
+#[repr(u16)]
+pub enum OperationalStatusSecondary {
+    /// No secondary status.
+    None = 0,
+    /// Creating a snapshot.
+    CreatingSnapshot = 32768,
+    /// Applying a snapshot.
+    ApplyingSnapshot = 32769,
+    /// Deleting a snapshot.
+    DeletingSnapshot = 32770,
+    /// Waiting to start.
+    WaitingToStart = 32771,
+    /// Merging disks (after snapshot delete).
+    MergingDisks = 32772,
+    /// Exporting VM.
+    ExportingVm = 32773,
+    /// VM is being migrated (live migration).
+    MigratingVm = 32774,
+    /// VM is being migrated to suspended state.
+    MigratingVmToSuspended = 32796,
+}
+
+impl OperationalStatusSecondary {
+    pub fn from_value(value: u16) -> Self {
+        match value {
+            32768 => OperationalStatusSecondary::CreatingSnapshot,
+            32769 => OperationalStatusSecondary::ApplyingSnapshot,
+            32770 => OperationalStatusSecondary::DeletingSnapshot,
+            32771 => OperationalStatusSecondary::WaitingToStart,
+            32772 => OperationalStatusSecondary::MergingDisks,
+            32773 => OperationalStatusSecondary::ExportingVm,
+            32774 => OperationalStatusSecondary::MigratingVm,
+            32796 => OperationalStatusSecondary::MigratingVmToSuspended,
+            _ => OperationalStatusSecondary::None,
+        }
+    }
+
+    /// Check if the VM is currently being migrated.
+    pub fn is_migrating(&self) -> bool {
+        matches!(
+            self,
+            OperationalStatusSecondary::MigratingVm
+                | OperationalStatusSecondary::MigratingVmToSuspended
+        )
+    }
 }
 
 impl OperationalStatus {
@@ -224,6 +307,9 @@ pub enum RequestedState {
     Saved = 32769,
     /// Reset the VM.
     Reset = 11,
+    /// Hibernate the VM (S4 power state).
+    /// This triggers a guest-initiated hibernate/save to disk.
+    Hibernated = 32783,
 }
 
 /// Shutdown type for graceful shutdown.
@@ -417,9 +503,10 @@ impl VmState {
             VmState::Off => VmStateError::Off,
             VmState::ShuttingDown => VmStateError::ShuttingDown,
             VmState::Paused => VmStateError::Paused,
-            VmState::Suspended => VmStateError::Suspended,
+            VmState::Suspended | VmState::SavedV2 => VmStateError::Suspended,
             VmState::Starting => VmStateError::Starting,
             VmState::Stopping => VmStateError::Stopping,
+            VmState::Hibernated => VmStateError::Hibernated,
             _ => VmStateError::Other(*self as u16),
         }
     }
@@ -456,6 +543,171 @@ impl AutomaticStopAction {
     }
 }
 
+/// Snapshot configuration for VM export.
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Default)]
+pub enum SnapshotExportMode {
+    /// Export all snapshots.
+    #[default]
+    AllSnapshots,
+    /// Export no snapshots (config only).
+    NoSnapshots,
+    /// Export only the snapshot subtree.
+    SubtreeOnly,
+}
+
+impl SnapshotExportMode {
+    pub fn to_value(&self) -> u8 {
+        match self {
+            SnapshotExportMode::AllSnapshots => 0,
+            SnapshotExportMode::NoSnapshots => 1,
+            SnapshotExportMode::SubtreeOnly => 2,
+        }
+    }
+}
+
+/// Capture live state mode for VM export.
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Default)]
+pub enum CaptureLiveState {
+    /// Capture crash-consistent state.
+    #[default]
+    CrashConsistent,
+    /// Capture application-consistent state.
+    ApplicationConsistent,
+    /// No live state capture.
+    None,
+}
+
+impl CaptureLiveState {
+    pub fn to_value(&self) -> u8 {
+        match self {
+            CaptureLiveState::CrashConsistent => 0,
+            CaptureLiveState::ApplicationConsistent => 1,
+            CaptureLiveState::None => 2,
+        }
+    }
+}
+
+/// Settings for VM export operation.
+///
+/// These settings control what is included in the export and how the export is performed.
+#[derive(Debug, Clone, Default)]
+pub struct ExportSettings {
+    /// Whether to copy VM runtime information (memory state, etc.).
+    /// Default: true for full export, false for config-only export.
+    pub copy_runtime_info: bool,
+
+    /// Whether to copy VM storage (VHDs).
+    /// Default: false (export only creates references to existing VHDs).
+    pub copy_storage: bool,
+
+    /// Snapshot export configuration.
+    pub snapshot_mode: SnapshotExportMode,
+
+    /// Live state capture mode.
+    pub capture_live_state: CaptureLiveState,
+
+    /// Whether to create a subdirectory for the VM export.
+    /// Default: true.
+    pub create_subdirectory: bool,
+
+    /// Whether to export for live migration.
+    /// When true, the export can be used for live migration scenarios.
+    pub for_live_migration: bool,
+
+    /// Whether to allow overwriting existing export files.
+    /// Default: false.
+    pub allow_overwrite: bool,
+}
+
+impl ExportSettings {
+    /// Create settings for a full VM export (including runtime state).
+    pub fn full() -> Self {
+        Self {
+            copy_runtime_info: true,
+            copy_storage: false,
+            snapshot_mode: SnapshotExportMode::AllSnapshots,
+            capture_live_state: CaptureLiveState::default(),
+            create_subdirectory: true,
+            for_live_migration: false,
+            allow_overwrite: false,
+        }
+    }
+
+    /// Create settings for config-only export (no runtime state).
+    pub fn config_only() -> Self {
+        Self {
+            copy_runtime_info: false,
+            copy_storage: false,
+            snapshot_mode: SnapshotExportMode::NoSnapshots,
+            capture_live_state: CaptureLiveState::CrashConsistent,
+            create_subdirectory: true,
+            for_live_migration: false,
+            allow_overwrite: false,
+        }
+    }
+
+    /// Create settings for live migration export.
+    pub fn for_live_migration() -> Self {
+        Self {
+            copy_runtime_info: false,
+            copy_storage: false,
+            snapshot_mode: SnapshotExportMode::NoSnapshots,
+            capture_live_state: CaptureLiveState::CrashConsistent,
+            create_subdirectory: true,
+            for_live_migration: true,
+            allow_overwrite: true,
+        }
+    }
+
+    /// Builder method: set whether to copy storage.
+    pub fn with_storage(mut self, copy: bool) -> Self {
+        self.copy_storage = copy;
+        self
+    }
+
+    /// Builder method: set snapshot export mode.
+    pub fn with_snapshot_mode(mut self, mode: SnapshotExportMode) -> Self {
+        self.snapshot_mode = mode;
+        self
+    }
+
+    /// Builder method: set whether to allow overwrite.
+    pub fn with_overwrite(mut self, allow: bool) -> Self {
+        self.allow_overwrite = allow;
+        self
+    }
+}
+
+/// Settings for VM import operation.
+#[derive(Debug, Clone, Default)]
+pub struct ImportSettings {
+    /// Generate a new unique identifier for the imported VM.
+    /// If false, retains the original VM's identifier (may conflict if VM already exists).
+    pub generate_new_id: bool,
+
+    /// Path to the snapshot folder (relative to import directory).
+    /// If None, uses the default "Snapshots" folder.
+    pub snapshot_folder: Option<String>,
+}
+
+impl ImportSettings {
+    /// Create import settings that retain the original VM ID.
+    pub fn retain_id() -> Self {
+        Self {
+            generate_new_id: false,
+            snapshot_folder: None,
+        }
+    }
+
+    /// Create import settings that generate a new VM ID.
+    pub fn new_id() -> Self {
+        Self {
+            generate_new_id: true,
+            snapshot_folder: None,
+        }
+    }
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
@@ -466,6 +718,8 @@ mod tests {
         assert_eq!(VmState::from_enabled_state(3), VmState::Off);
         assert_eq!(VmState::from_enabled_state(32768), VmState::Paused);
         assert_eq!(VmState::from_enabled_state(32769), VmState::Suspended);
+        assert_eq!(VmState::from_enabled_state(32779), VmState::SavedV2);
+        assert_eq!(VmState::from_enabled_state(32783), VmState::Hibernated);
         assert_eq!(VmState::from_enabled_state(999), VmState::Unknown);
     }
 
@@ -474,8 +728,27 @@ mod tests {
         assert!(VmState::Off.can_start());
         assert!(VmState::Suspended.can_start());
         assert!(VmState::Paused.can_start());
+        assert!(VmState::SavedV2.can_start());
+        assert!(VmState::Hibernated.can_start());
         assert!(!VmState::Running.can_start());
         assert!(!VmState::Starting.can_start());
+    }
+
+    #[test]
+    fn test_vm_state_can_hibernate() {
+        assert!(VmState::Running.can_hibernate());
+        assert!(!VmState::Off.can_hibernate());
+        assert!(!VmState::Paused.can_hibernate());
+        assert!(!VmState::Hibernated.can_hibernate());
+    }
+
+    #[test]
+    fn test_vm_state_is_saved() {
+        assert!(VmState::Suspended.is_saved());
+        assert!(VmState::SavedV2.is_saved());
+        assert!(VmState::Hibernated.is_saved());
+        assert!(!VmState::Running.is_saved());
+        assert!(!VmState::Off.is_saved());
     }
 
     #[test]
@@ -595,6 +868,38 @@ mod tests {
             OperationalStatus::from_value(999),
             OperationalStatus::Unknown
         );
+    }
+
+    #[test]
+    fn test_operational_status_secondary_from_value() {
+        assert_eq!(
+            OperationalStatusSecondary::from_value(0),
+            OperationalStatusSecondary::None
+        );
+        assert_eq!(
+            OperationalStatusSecondary::from_value(32768),
+            OperationalStatusSecondary::CreatingSnapshot
+        );
+        assert_eq!(
+            OperationalStatusSecondary::from_value(32774),
+            OperationalStatusSecondary::MigratingVm
+        );
+        assert_eq!(
+            OperationalStatusSecondary::from_value(32796),
+            OperationalStatusSecondary::MigratingVmToSuspended
+        );
+        assert_eq!(
+            OperationalStatusSecondary::from_value(999),
+            OperationalStatusSecondary::None
+        );
+    }
+
+    #[test]
+    fn test_operational_status_secondary_is_migrating() {
+        assert!(OperationalStatusSecondary::MigratingVm.is_migrating());
+        assert!(OperationalStatusSecondary::MigratingVmToSuspended.is_migrating());
+        assert!(!OperationalStatusSecondary::None.is_migrating());
+        assert!(!OperationalStatusSecondary::CreatingSnapshot.is_migrating());
     }
 
     #[test]

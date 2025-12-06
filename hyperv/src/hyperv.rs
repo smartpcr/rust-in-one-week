@@ -2,8 +2,9 @@ use crate::checkpoint::{Checkpoint, CheckpointSettings};
 use crate::error::{Error, Result};
 use crate::network::{NetworkAdapter, NetworkAdapterSettings, VirtualSwitch};
 use crate::storage::{ControllerType, DiskAttachment, IsoAttachment, VhdManager};
-use crate::vm::{Generation, VirtualMachine, VmSettings, VmState};
+use crate::vm::{Generation, ImportSettings, VirtualMachine, VmSettings, VmState};
 use crate::wmi::{WbemClassObjectExt, WmiConnection};
+use std::path::Path;
 use std::sync::Arc;
 use windows::Win32::System::Wmi::IWbemClassObject;
 
@@ -17,6 +18,14 @@ impl HyperV {
     pub fn connect() -> Result<Self> {
         let connection = Arc::new(WmiConnection::connect()?);
         Ok(Self { connection })
+    }
+
+    /// Get the WMI connection for advanced operations.
+    ///
+    /// This provides access to the underlying WMI connection for operations
+    /// that are not exposed through the high-level API, such as GPU management.
+    pub fn connection(&self) -> Arc<WmiConnection> {
+        Arc::clone(&self.connection)
     }
 
     // ========== VM Operations ==========
@@ -97,6 +106,7 @@ impl HyperV {
         let result_system = out_params
             .get_string_prop("ResultingSystem")?
             .ok_or_else(|| Error::OperationFailed {
+                failure_type: crate::error::FailureType::Unknown,
                 operation: "DefineSystem",
                 return_value: 0,
                 message: "No ResultingSystem returned".to_string(),
@@ -169,6 +179,228 @@ impl HyperV {
             self.connection
                 .exec_method(&mgmt_path, "DestroySystem", Some(&in_params))?;
         self.handle_job_result(&out_params, "DestroySystem")
+    }
+
+    /// Import a virtual machine from an export directory.
+    ///
+    /// This imports a previously exported VM from the specified directory.
+    /// The import process consists of two steps:
+    /// 1. Import the system definition to create a "planned" VM
+    /// 2. Realize the planned VM to create the actual VM
+    ///
+    /// # Arguments
+    ///
+    /// * `vm_name` - The name of the VM (used to locate the export subdirectory).
+    /// * `import_directory` - The root directory containing the VM export.
+    /// * `settings` - Import settings controlling how the VM is imported.
+    ///
+    /// # Example
+    ///
+    /// ```no_run
+    /// # use windows_hyperv::{HyperV, ImportSettings};
+    /// # fn main() -> windows_hyperv::Result<()> {
+    /// let hyperv = HyperV::connect()?;
+    ///
+    /// // Import VM retaining original ID
+    /// let vm = hyperv.import_vm("MyVM", "C:\\Exports", &ImportSettings::retain_id())?;
+    ///
+    /// // Import VM with new ID (avoids conflicts)
+    /// let vm = hyperv.import_vm("MyVM", "C:\\Exports", &ImportSettings::new_id())?;
+    /// # Ok(())
+    /// # }
+    /// ```
+    pub fn import_vm(
+        &self,
+        vm_name: &str,
+        import_directory: impl AsRef<Path>,
+        settings: &ImportSettings,
+    ) -> Result<VirtualMachine> {
+        let import_dir = import_directory.as_ref();
+
+        // Build the paths for system definition file and snapshot folder
+        // The export structure is: {import_dir}/{vm_name}/Virtual Machines/{file}.vmcx
+        let vm_folder = import_dir.join(vm_name);
+        let vm_machines_folder = vm_folder.join("Virtual Machines");
+
+        // Find the system definition file (.vmcx or .xml)
+        let system_definition_file = self.find_system_definition_file(&vm_machines_folder)?;
+
+        // Snapshot folder path
+        let snapshot_folder = match &settings.snapshot_folder {
+            Some(folder) => import_dir.join(folder),
+            None => vm_folder.join("Snapshots"),
+        };
+
+        // Get the management service
+        let mgmt_service = self.get_management_service()?;
+        let mgmt_path = mgmt_service.get_path()?;
+
+        // Step 1: Import the system definition
+        let in_params = self
+            .connection
+            .get_method_params("Msvm_VirtualSystemManagementService", "ImportSystemDefinition")?;
+
+        in_params.put_string("SystemDefinitionFile", &system_definition_file.to_string_lossy())?;
+        in_params.put_string("SnapshotFolder", &snapshot_folder.to_string_lossy())?;
+        in_params.put_bool("GenerateNewSystemIdentifier", settings.generate_new_id)?;
+
+        let out_params = self
+            .connection
+            .exec_method(&mgmt_path, "ImportSystemDefinition", Some(&in_params))?;
+        self.handle_job_result(&out_params, "ImportSystemDefinition")?;
+
+        // Get the imported system (planned VM)
+        let imported_system_path = out_params
+            .get_string_prop("ImportedSystem")?
+            .ok_or_else(|| Error::OperationFailed {
+                failure_type: crate::error::FailureType::Unknown,
+                operation: "ImportSystemDefinition",
+                return_value: 0,
+                message: "No ImportedSystem returned".to_string(),
+            })?;
+
+        // Step 2: Realize the planned system to create the actual VM
+        let realize_params = self
+            .connection
+            .get_method_params("Msvm_VirtualSystemManagementService", "RealizePlannedSystem")?;
+
+        realize_params.put_string("PlannedSystem", &imported_system_path)?;
+
+        let realize_out = self
+            .connection
+            .exec_method(&mgmt_path, "RealizePlannedSystem", Some(&realize_params))?;
+        self.handle_job_result(&realize_out, "RealizePlannedSystem")?;
+
+        // Get the resulting VM - try ResultingSystem first, fall back to getting by name
+        // For async operations, ResultingSystem may not be populated in the output params
+        if let Ok(Some(result_system)) = realize_out.get_string_prop("ResultingSystem") {
+            if !result_system.is_empty() {
+                let vm_obj = self.connection.get_object(&result_system)?;
+                return VirtualMachine::from_wmi(&vm_obj, Arc::clone(&self.connection));
+            }
+        }
+
+        // Fall back to getting VM by name (follows C++ pattern)
+        self.get_vm(vm_name)
+    }
+
+    /// Import a VM as a planned VM (without realizing it).
+    ///
+    /// This imports the VM configuration but leaves it in a "planned" state.
+    /// The planned VM can be modified before being realized.
+    ///
+    /// Returns the path to the planned system WMI object.
+    pub fn import_planned_vm(
+        &self,
+        vm_name: &str,
+        import_directory: impl AsRef<Path>,
+        settings: &ImportSettings,
+    ) -> Result<String> {
+        let import_dir = import_directory.as_ref();
+
+        let vm_folder = import_dir.join(vm_name);
+        let vm_machines_folder = vm_folder.join("Virtual Machines");
+
+        let system_definition_file = self.find_system_definition_file(&vm_machines_folder)?;
+
+        let snapshot_folder = match &settings.snapshot_folder {
+            Some(folder) => import_dir.join(folder),
+            None => vm_folder.join("Snapshots"),
+        };
+
+        let mgmt_service = self.get_management_service()?;
+        let mgmt_path = mgmt_service.get_path()?;
+
+        let in_params = self
+            .connection
+            .get_method_params("Msvm_VirtualSystemManagementService", "ImportSystemDefinition")?;
+
+        in_params.put_string("SystemDefinitionFile", &system_definition_file.to_string_lossy())?;
+        in_params.put_string("SnapshotFolder", &snapshot_folder.to_string_lossy())?;
+        in_params.put_bool("GenerateNewSystemIdentifier", settings.generate_new_id)?;
+
+        let out_params = self
+            .connection
+            .exec_method(&mgmt_path, "ImportSystemDefinition", Some(&in_params))?;
+        self.handle_job_result(&out_params, "ImportSystemDefinition")?;
+
+        out_params
+            .get_string_prop("ImportedSystem")?
+            .ok_or_else(|| Error::OperationFailed {
+                failure_type: crate::error::FailureType::Unknown,
+                operation: "ImportSystemDefinition",
+                return_value: 0,
+                message: "No ImportedSystem returned".to_string(),
+            })
+    }
+
+    /// Realize a planned VM to create the actual virtual machine.
+    ///
+    /// This completes the import process for a VM that was imported as planned.
+    pub fn realize_planned_vm(&self, planned_system_path: &str) -> Result<VirtualMachine> {
+        // Get the planned system to extract the VM name for later lookup
+        let planned_system = self.connection.get_object(planned_system_path)?;
+        let vm_name = planned_system
+            .get_string_prop("ElementName")?
+            .ok_or_else(|| Error::OperationFailed {
+                failure_type: crate::error::FailureType::Unknown,
+                operation: "RealizePlannedSystem",
+                return_value: 0,
+                message: "Could not get ElementName from planned system".to_string(),
+            })?;
+
+        let mgmt_service = self.get_management_service()?;
+        let mgmt_path = mgmt_service.get_path()?;
+
+        let realize_params = self
+            .connection
+            .get_method_params("Msvm_VirtualSystemManagementService", "RealizePlannedSystem")?;
+
+        realize_params.put_string("PlannedSystem", planned_system_path)?;
+
+        let realize_out = self
+            .connection
+            .exec_method(&mgmt_path, "RealizePlannedSystem", Some(&realize_params))?;
+        self.handle_job_result(&realize_out, "RealizePlannedSystem")?;
+
+        // Get the resulting VM - try ResultingSystem first, fall back to getting by name
+        // For async operations, ResultingSystem may not be populated in the output params
+        if let Ok(Some(result_system)) = realize_out.get_string_prop("ResultingSystem") {
+            if !result_system.is_empty() {
+                let vm_obj = self.connection.get_object(&result_system)?;
+                return VirtualMachine::from_wmi(&vm_obj, Arc::clone(&self.connection));
+            }
+        }
+
+        // Fall back to getting VM by name (follows C++ pattern)
+        self.get_vm(&vm_name)
+    }
+
+    /// Find the system definition file in a VM export folder.
+    fn find_system_definition_file(&self, vm_machines_folder: &Path) -> Result<std::path::PathBuf> {
+        // Look for .vmcx files first (newer format), then .xml (older format)
+        let extensions = ["vmcx", "xml"];
+
+        for ext in &extensions {
+            if let Ok(entries) = std::fs::read_dir(vm_machines_folder) {
+                for entry in entries.flatten() {
+                    let path = entry.path();
+                    if path.extension().is_some_and(|e| e == *ext) {
+                        return Ok(path);
+                    }
+                }
+            }
+        }
+
+        Err(Error::OperationFailed {
+            failure_type: crate::error::FailureType::Unknown,
+            operation: "ImportSystemDefinition",
+            return_value: 0,
+            message: format!(
+                "No system definition file found in {}",
+                vm_machines_folder.display()
+            ),
+        })
     }
 
     // ========== Storage Operations ==========
@@ -368,6 +600,7 @@ impl HyperV {
             .into_iter()
             .last()
             .ok_or_else(|| Error::OperationFailed {
+                failure_type: crate::error::FailureType::Unknown,
                 operation: "AddNetworkAdapter",
                 return_value: 0,
                 message: "Failed to find created adapter".to_string(),
@@ -512,6 +745,7 @@ impl HyperV {
             .find(|cp| !existing_checkpoint_ids.contains(&cp.id));
 
         new_checkpoint.ok_or_else(|| Error::OperationFailed {
+            failure_type: crate::error::FailureType::Unknown,
             operation: "CreateSnapshot",
             return_value: 0,
             message: "No new checkpoint found after creation".to_string(),
@@ -536,6 +770,7 @@ impl HyperV {
                 }
             }
             code => Err(Error::OperationFailed {
+                failure_type: crate::error::FailureType::Unknown,
                 operation: "CreateSnapshot",
                 return_value: code,
                 message: "CreateSnapshot failed".to_string(),
@@ -578,6 +813,7 @@ impl HyperV {
                     let error_code = job.get_u32("ErrorCode")?.unwrap_or(0);
                     let error_desc = job.get_string_prop("ErrorDescription")?.unwrap_or_default();
                     return Err(Error::JobFailed {
+                        job_state: crate::error::JobState::Exception,
                         operation: "CreateSnapshot",
                         error_code,
                         error_description: error_desc,
@@ -949,6 +1185,7 @@ impl HyperV {
         }
 
         Err(Error::OperationFailed {
+            failure_type: crate::error::FailureType::Unknown,
             operation: "FindController",
             return_value: 0,
             message: format!(
@@ -1012,6 +1249,7 @@ impl HyperV {
         }
 
         Err(Error::OperationFailed {
+            failure_type: crate::error::FailureType::Unknown,
             operation: "FindDiskDrive",
             return_value: 0,
             message: format!("Disk drive at location {} not found", location),
@@ -1050,6 +1288,7 @@ impl HyperV {
         }
 
         Err(Error::OperationFailed {
+            failure_type: crate::error::FailureType::Unknown,
             operation: "FindDvdDrive",
             return_value: 0,
             message: format!("DVD drive at location {} not found", location),
@@ -1074,6 +1313,7 @@ impl HyperV {
                 }
             }
             code => Err(Error::OperationFailed {
+                failure_type: crate::error::FailureType::Unknown,
                 operation,
                 return_value: code,
                 message: format!("{} failed", operation),
@@ -1093,6 +1333,7 @@ impl HyperV {
                     let error_code = job.get_u32("ErrorCode")?.unwrap_or(0);
                     let error_desc = job.get_string_prop("ErrorDescription")?.unwrap_or_default();
                     return Err(Error::JobFailed {
+                        job_state: crate::error::JobState::Exception,
                         operation,
                         error_code,
                         error_description: error_desc,

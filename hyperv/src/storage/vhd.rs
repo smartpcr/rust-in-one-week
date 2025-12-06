@@ -506,6 +506,7 @@ impl VhdManager {
                 }
             }
             code => Err(Error::OperationFailed {
+                failure_type: crate::error::FailureType::Unknown,
                 operation,
                 return_value: code,
                 message: format!("{} failed", operation),
@@ -524,6 +525,7 @@ impl VhdManager {
                     let error_code = job.get_u32("ErrorCode")?.unwrap_or(0);
                     let error_desc = job.get_string_prop("ErrorDescription")?.unwrap_or_default();
                     return Err(Error::JobFailed {
+                        job_state: crate::error::JobState::Exception,
                         operation,
                         error_code,
                         error_description: error_desc,

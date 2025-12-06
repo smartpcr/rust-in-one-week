@@ -51,11 +51,19 @@ pub mod checkpoint;
 #[cfg(windows)]
 pub mod error;
 #[cfg(windows)]
+pub mod gpu;
+#[cfg(windows)]
 mod hyperv;
 #[cfg(windows)]
 pub mod network;
 #[cfg(windows)]
+pub mod processor;
+#[cfg(windows)]
+pub mod security;
+#[cfg(windows)]
 pub mod storage;
+#[cfg(windows)]
+pub mod validation;
 #[cfg(windows)]
 pub mod vm;
 #[cfg(windows)]
@@ -63,16 +71,18 @@ pub mod wmi;
 
 // Re-export main types at crate root
 #[cfg(windows)]
-pub use error::{Error, Result};
+pub use error::{Error, FailureType, JobState, MigrationError, Result, SecurityError};
 #[cfg(windows)]
 pub use hyperv::HyperV;
 
 // VM types
 #[cfg(windows)]
 pub use vm::{
-    AutomaticStartAction, AutomaticStopAction, BlockSize, CheckpointType, DiskLocation, DiskSize,
-    Generation, MemoryBufferPercent, MemoryMB, OperationalStatus, ProcessorCount, RequestedState,
-    SectorSize, ShutdownType, StartupDelay, VirtualMachine, VmSettings, VmSettingsBuilder, VmState,
+    AutomaticStartAction, AutomaticStopAction, BlockSize, CaptureLiveState, CheckpointType,
+    DiskLocation, DiskSize, ExportSettings, Generation, ImportSettings, MemoryBufferPercent,
+    MemoryMB, OperationalStatus, OperationalStatusSecondary, ProcessorCount, RequestedState,
+    SectorSize, ShutdownType, SnapshotExportMode, StartupDelay, VirtualMachine, VmSettings,
+    VmSettingsBuilder, VmState,
 };
 
 // Checkpoint types
@@ -92,4 +102,28 @@ pub use network::{
     BandwidthSettings, NetworkAdapter, NetworkAdapterSettings, NetworkAdapterSettingsBuilder,
     PortMirroringMode, SwitchType, VirtualSwitch, VirtualSwitchSettings,
     VirtualSwitchSettingsBuilder,
+};
+
+// WMI types for advanced usage
+#[cfg(windows)]
+pub use wmi::{
+    ConnectionConfig, Credentials, JobProgress, JobWaiter, WbemClassObjectExt, WmiConnection,
+};
+
+// Validation types
+#[cfg(windows)]
+pub use validation::{HostCapabilities, PropertySupport, PropertyValidator, VmVersionInfo};
+
+// Security types
+#[cfg(windows)]
+pub use security::{
+    FirmwareType, GuestIsolationType, KeyProtectorType, SecureBootTemplate, SecuritySettings,
+    SecuritySettingsBuilder, TpmState,
+};
+
+// Processor types
+#[cfg(windows)]
+pub use processor::{
+    CpuGroupId, CpuLimit, CpuReservation, CpuWeight, HwThreadsPerCore, L3DistributionPolicy,
+    NumaNode, NumaTopology, ProcessorSettings, ProcessorSettingsBuilder,
 };
